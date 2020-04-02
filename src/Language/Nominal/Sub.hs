@@ -22,8 +22,6 @@ Nominal treatment of substitution
 {-# LANGUAGE PartialTypeSignatures #-}  
 
 module Language.Nominal.Sub 
-{-    ( Name, nameLabel, Nom(..), res, resM, resF, fresh, errName, unNom, unsafeUnNom, Abs(..), absFresh, absByName, absFuncOut, (@@), (@@@), Sub(..), Cong(..), repeatedly
-    ) -}
     where
 
 

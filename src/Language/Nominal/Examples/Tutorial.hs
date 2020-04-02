@@ -171,6 +171,41 @@ step13 = sub a b [a,b,c] -- should return [b,b,c]
 step14 :: Abs MyNameLabel [MyName]
 step14 = sub a b $ absByName b [a,b,c]
 -- | A larger development is in "SystemF".  Suggestions and comments welcome.
+
+-- * Interaction of abstraction and functions
+
+-- | @a.a@, @b.b@, @a.c@, and @b.c@ are all distinct.
+-- But this is only because the abstraction stores the name labels 
+-- ("a", "b", "a", and "b" respectively) of the bound name. 
+step15a :: (Bool, Bool)
+step15a = (absByName a a == absByName b b, absByName a c == absByName b c)
+
+-- | Let's wipe those labels, and what we do next will be easier
+an :: MyName
+an = nameOverwriteLabel Nothing a
+bn :: MyName
+bn = nameOverwriteLabel Nothing b
+cn :: MyName
+cn = nameOverwriteLabel Nothing c
+
+-- | Now note that @a.a == b.b@ and @a.c = b.c@ (up to name labels, which are now reset)
+step15 :: (Bool, Bool)
+step15 = (absByName an an == absByName bn bn, absByName an cn == absByName bn cn)
+-- | Abstraction is capturing: @(\x -> a.x) a@ should evaluate to @a.a@
+step16 :: Bool
+step16 = ((\x -> absByName an x) an) == absByName an an 
+-- | Thus @\x -> a.x@ and @\x -> b.x@ are not equal (the latter evalutes to @b.a@ on @a@).
+step17 :: Bool
+step17 = (\x -> absByName an x) an == (\x -> absByName bn x) an
+-- | We can abstract in functions.
+-- Consider a program involving @a.(\x -> a.x)@.  
+-- The @a@ is abstracted ... in the abstraction function @\x -> a.x@.
+-- So @a.(\x -> a.x)@ concreted at 'b' is @(\x -> b.x)@.
+step18 :: Bool
+step18 = ( (conc (absByName an (\x -> absByName an x)) an) an 
+         , (conc (absByName an (\x -> absByName an x)) bn) an 
+         ) == (absByName an an, absByName bn an)          
+
 theEnd :: Bool
 theEnd = True
  

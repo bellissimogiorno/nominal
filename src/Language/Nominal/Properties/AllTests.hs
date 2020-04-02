@@ -11,7 +11,7 @@ Nominal-flavoured implementation of data in a context of local names, designed f
 
 Run tests by 
 
-- typing @stack ghci AllTests@ from the command line (in the directory containing @AllTests.hs@, then @quickcheck prop_name@ from the Haskell prompt, or 
+- typing @stack ghci AllTests@ from the command line in the directory containing @AllTests.hs@, then typing @quickcheck prop_name@ from the Haskell prompt, or 
 - by typing @stack test@ from the command line (e.g. in the root directory of this package). 
 
 -}
