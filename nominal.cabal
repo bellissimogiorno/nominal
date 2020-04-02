@@ -1,0 +1,87 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 0ae2a11fa826abfe7b7b66971416b3c670504d1e6009203f7fc63b68c3ed9d69
+
+name:           nominal
+version:        0.1.0.0
+description:    Nominal-flavoured implementation of data in a context of local names, designed following the ideas in <https://link.springer.com/article/10.1007/s001650200016 a new approach to abstract syntax with variable binding> (see also <http://www.gabbay.org.uk/papers.html#newaas-jv author's pdfs>).
+                See also a tutorial in "Language.Nominal.Examples.Tutorial", an example development of System F in "Language.Nominal.Examples.SystemF", and properties in "Language.Nominal.Properties.AllTests".
+homepage:       https://github.com/bellissimogiorno/nominal#readme
+bug-reports:    https://github.com/bellissimogiorno/nominal/issues
+author:         Murdoch J. Gabbay
+maintainer:     murdoch.gabbay@gmail.com
+copyright:      2020 Murdoch J. Gabbay
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/nominal
+
+library
+  exposed-modules:
+      Language.Nominal.Utilities
+      Language.Nominal.Names
+      Language.Nominal.Nom
+      Language.Nominal.Abs
+      Language.Nominal.Sub
+      Language.Nominal.Examples.SystemF
+      Language.Nominal.Examples.Tutorial
+      Language.Nominal
+      Language.Nominal.Properties.SpecUtilities
+      Language.Nominal.Properties.NamesSpec
+      Language.Nominal.Properties.NomSpec
+      Language.Nominal.Properties.AbsSpec
+      Language.Nominal.Properties.Examples.SystemFSpec
+      Language.Nominal.Properties.AllTests
+  hs-source-dirs:
+      src
+  build-depends:
+      QuickCheck
+    , Unique
+    , base >=4.7 && <5
+    , containers
+    , extra
+  default-language: Haskell2010
+  ghc-options: -Wall
+
+-- executable nominal-exe
+--   main-is: Main.hs
+--   other-modules:
+--       Paths_nominal
+--   hs-source-dirs:
+--       app
+--   ghc-options: -threaded -rtsopts -with-rtsopts=-N
+--   build-depends:
+--       QuickCheck
+--     , Unique
+--     , base >=4.7 && <5
+--     , containers
+--     , extra
+--     , nominal
+--   default-language: Haskell2010
+
+test-suite nominal-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Language.Nominal.NamesSpec
+    , Language.Nominal.NomSpec
+    , Language.Nominal.AbsSpec
+    , Language.Nominal.SpecUtilities
+    , Language.Nominal.Examples.SystemFSpec
+  hs-source-dirs:
+      test
+  ghc-options: -Wall
+  build-depends:
+      base >=4.7 && <5
+    , hspec
+    , hspec-discover
+    , nominal
+    , QuickCheck
+  default-language: Haskell2010
