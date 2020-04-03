@@ -36,13 +36,13 @@ newtype Abs t a = Abs (Maybe t, Name t -> a)
 
 -- We could also set `Abs t a = Abs (Nom t (Name t, a))`, but this would make later type signatures more complex, e.g. by requiring `Swappable t a` in 'conc' and '@@'.
 
--- | Create an abstraction by providing a name and a datum in which that name can be swapped (straight out of the paper [gabbay-newaas])
+-- | Create an abstraction by providing a name and a datum in which that name can be swapped (straight out of the paper; <https://link.springer.com/article/10.1007/s001650200016 publisher> and <http://www.gabbay.org.uk/papers.html#newaas-jv author's> pdfs).
 absByName :: Swappable t a => Name t -> a -> Abs t a
 absByName nam a = 
    let t = nameLabel nam in 
       Abs (t, \nam' -> swp (nameOverwriteLabel t nam') nam a) -- nameOverwriteLabel may not be required 
 
--- | Concrete an abstraction at a name.  Unsafe if the name is not fresh.
+-- | Concrete an abstraction at a name.  Unsafe if the name is not fresh for @a@.
 conc :: Abs t a -> Name t -> a
 conc (Abs (t', f)) nam = f $ nameOverwriteLabel t' nam -- perhaps should check if t is nothing, and if so take label from nam instead?
 

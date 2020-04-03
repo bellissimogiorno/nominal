@@ -339,22 +339,6 @@ instance {-# OVERLAPS #-} Show (Maybe Typ) where
    --    "let " ++ x ++ " = " ++ ppp_ y ++ " in " ++ ppp_ z
 -}
 
-{-
-http://hackage.haskell.org/package/unbound-0.4/src/tutorial/Tutorial.lhs
-https://hackage.haskell.org/package/unbound
-
- "borrowed" from https://crypto.stanford.edu/~blynn/lambda/systemf.html 
-id=\X x:X.x                             -- Polymorphic identity.
-xx=\x:forall X.X->X.x[forall X.X->X] x  -- Self-application.
-xx id
-iter2   = \X f:X->X x:X.f(f x)
-iter4   = \X. iter2 [X->X] (iter2 [X])
-iter256 = \X. iter4 [X->X] (iter4 [X])  -- 4^4 = 256.
-0    = \X s:X->X z:X.z  -- Church numerals.
-succ = \n:(forall X.(X->X)->X->X) X s:X->X z:X.s(n[X] s z)
-iter4 [forall X.(X->X)->X->X] succ 0
-iter256 [forall X.(X->X)->X->X] succ 0
--}
 
 -- * Helper functions for building terms 
 
@@ -420,25 +404,4 @@ transform = tall "X" $ \xx -> xx :-> xx
 -- | Self-application = λx:∀X.X->X.x[∀X.X->X] x
 selfapp :: Trm
 selfapp = lam ("x", transform) $ \x -> (x @@. transform) @. x  
-
-{-- test1 = App (TApp idTrm nat) zero
-test2 = (nf' $ App (TApp idTrm nat) zero) == zero
---}
-
-{- 
-var1 = unsafeUnNom $ freshName ("var1",TVar tvar1)
-var2 = unsafeUnNom $ freshName ("var2",TVar tvar2)
-ttest0 = Lam (absByName var1 (Var var1)) 
-tvar1 = unsafeUnNom $ freshName "t1"
-tvar2 = unsafeUnNom $ freshName "t2"
-ftest0a = (swp tvar1 tvar2 (tvar1, tvar2)) 
-ftest0b = (swp tvar1 tvar2 (TVar tvar1, TVar tvar2)) 
-ftest1 = sub tvar1 (TVar tvar2) (TVar tvar1 :-> TVar tvar2)
-ftest2 = All $ absByName tvar2 (TVar tvar2 :-> TVar tvar1)
-ftest3 = sub tvar1 (TVar tvar2) ftest2
--- ftest4 = subM (absByName tvar2 ftest2) tvar1 
--- ftest4 = All $ absByName tvar1 ftest2
--}
-
-
 

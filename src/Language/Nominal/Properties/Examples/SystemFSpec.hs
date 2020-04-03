@@ -8,9 +8,7 @@ import Language.Nominal.Nom
 import Language.Nominal.Sub
 import Language.Nominal.Examples.SystemF
 
--- | (id id) has no type (it needs a type argument)
-prop_untypable :: Bool 
-prop_untypable = typeOf (App idTrm idTrm) == Nothing
+-- * Substitution
 
 -- | y[n-> var n] = y
 iprop_sub_id :: (Sub n x y, Eq y) => (Name n -> x) -> Name n -> y -> Bool 
@@ -44,6 +42,18 @@ prop_sub_perm_typevar'' = iprop_sub_perm TVar
 prop_sub_perm_termvar :: Name NTrm -> Name NTrm -> Trm -> Property 
 prop_sub_perm_termvar = iprop_sub_perm Var 
 
+
+-- * Typing and reduction
+
+-- | (id id) has no type (it needs a type argument)
+prop_untypable :: Bool 
+prop_untypable = typeOf (App idTrm idTrm) == Nothing
+
+-- | Not all terms are typable
+prop_all_typable :: Trm -> Property 
+prop_all_typable t = expectFailure $ typable t 
+
+
 prop_typable_nf :: Trm -> Property
 prop_typable_nf = \t -> typable t ==> normalisable t
 
@@ -54,10 +64,6 @@ prop_nf_typable = \t -> normalisable t ==> typable t
 -- If a term is typable and normalisable then its normal form has the same type as it does. 
 prop_type_soundness :: Trm -> Property 
 prop_type_soundness t = typable t ==> normalisable t ==> (typeOf t === (typeOf =<< nf t))
-
--- | Not all terms are typable
-prop_all_typable :: Trm -> Property 
-prop_all_typable t = expectFailure $ typable t 
 
 -- | typeof(id t) = typeof(t)
 prop_id_type_unchanged :: Trm -> Property 
@@ -73,6 +79,8 @@ prop_typable_sub n t1 t2 = typable t1 ==> typable t2 ==> typable $ sub n t1 t2 -
 {-- prop_typable_sub' :: Name NTrm -> Trm -> Trm -> Property
 prop_typable_sub' n t1 t2 = typable t1 ==> typable t2 ==> ((typeOf' t2) === (typeOf' (sub n' t1 t2))) where 
    n' = nameOverwriteLabel (Just ("",typeOf' t1)) n --}
+
+-- * Church numerals
 
 -- | 0 : nat
 prop_typeof_zero :: Bool
