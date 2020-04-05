@@ -10,14 +10,12 @@ Portability : POSIX
 Nominal treatment of substitution
 -}
 
-{-# LANGUAGE TemplateHaskell       #-}  -- needed for QuickCheck test generation
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE UndecidableInstances  #-}  -- needed for Num a => Nameless a
 {-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeSynonymInstances  #-}
 -- {-# LANGUAGE OverlappingInstances  #-}  
 {-# LANGUAGE PartialTypeSignatures #-}  
 
@@ -47,7 +45,7 @@ instance Sub n (Name n) (Name n) where
 
 -- | sub on name-contexts 
 instance Swappable n a => Sub n a (Name n -> a) where
-   sub n x k = \n' -> if n' == n then x else k n'
+   sub n x k = \n' -> if n' == n then x else k n'  -- hlint redundant lambda warning ignored for (IMO) clarity
 
 -- | sub on tuples 
 instance (Sub n x a, Sub n x b) => Sub n x (a,b) where
@@ -75,10 +73,4 @@ instance (Swappable n y, Sub n x t, Sub n x y) => Sub n x (Abs t y) where
 
 -- | sub on a nominal abstraction substitutes in the label, and substitutes capture-avoidingly in the body
 instance (Sub n x t, Sub n x y, Swappable n (Name t)) => Sub n x (Abs t y) where
-   sub n x (Abs (t', f)) = Abs (sub n x <$> t', \yname -> sub n x $ f (nameOverwriteLabel t' yname))
-
-
-
-
-
-
+   sub n x (Abs (t', f)) = Abs (sub n x <$> t', sub n x . f . nameOverwriteLabel t')

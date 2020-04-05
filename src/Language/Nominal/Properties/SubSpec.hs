@@ -22,7 +22,7 @@ import Language.Nominal.Examples.SystemF
 
 -- | y[n-> var n] = y
 iprop_sub_id :: (Sub n x y, Eq y) => (Name n -> x) -> Name n -> y -> Bool 
-iprop_sub_id f n y = (y == sub n (f n) y)
+iprop_sub_id f n y = y == sub n (f n) y
 prop_sub_id_typevar' :: Name NTyp -> Typ -> Bool 
 prop_sub_id_typevar' = iprop_sub_id TVar 
 prop_sub_id_termvar :: Name NTrm -> Trm -> Bool 
@@ -42,7 +42,7 @@ prop_sub_fresh_termvar = iprop_sub_fresh
 
 -- | n' # y => y[n->n'] = (n' n).y
 iprop_sub_perm :: (Sub n x y, Eq y, Show y) => (Name n -> x) -> Name n -> Name n -> y -> Property 
-iprop_sub_perm f n n' y = isFresh n' y ==> ((sub n (f n') y) === swp n' n y)
+iprop_sub_perm f n n' y = isFresh n' y ==> sub n (f n') y === swp n' n y
 prop_sub_perm_typevar' :: Name NTyp -> Name NTyp -> Typ -> Property 
 prop_sub_perm_typevar' = iprop_sub_perm TVar 
 -- this one trapped an error

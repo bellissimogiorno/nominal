@@ -92,9 +92,9 @@ step4 = absaa == absaa
 b :: MyName
 b = unsafeUnNom $ freshName "b"
 step4a :: Bool
-step4a = (conc absaa a) == a
+step4a = conc absaa a == a
 step4b :: Bool
-step4b = (conc absaa b) == b
+step4b = conc absaa b == b
 step4warning :: (MyName, MyName)
 step4warning = conc (absByName a (a,b)) b
 
@@ -201,9 +201,12 @@ cn = nameOverwriteLabel Nothing c
 -- | Now note that @a.a == b.b@ and @a.c = b.c@ (up to name labels, which are now reset)
 step15 :: (Bool, Bool)
 step15 = (absByName an an == absByName bn bn, absByName an cn == absByName bn cn)
--- | Abstraction is capturing: @(\x -> a.x) a@ should evaluate to @a.a@
+-- | Abstraction is capturing: @(\x -> a.x) a@ should evaluate to @a.a@ 
+-- (hlint complains about this and the examples which follow, because 
+-- the left-hand side is just an eta-conversion.  However,
+--  that's the point: names are bound as if name-binding was just a pair of a name and a datum.) 
 step16 :: Bool
-step16 = ((\x -> absByName an x) an) == absByName an an 
+step16 = (\x -> absByName an x) an == absByName an an 
 -- | Thus @\x -> a.x@ and @\x -> b.x@ are not equal (the latter evalutes to @b.a@ on @a@).
 step17 :: Bool
 step17 = (\x -> absByName an x) an == (\x -> absByName bn x) an

@@ -8,7 +8,7 @@ import Language.Nominal.Nom
 
 -- | Check restriction creates local scope.  
 -- Should return False.
-prop_split_scope :: (Name String) -> Bool
+prop_split_scope :: Name String -> Bool
 prop_split_scope n = unNom $ do -- Nom monad
    let (x1,x2) = (res [n] n, res [n] n) -- create two scopes
    y1 <- x1                             -- unpack them
@@ -38,9 +38,12 @@ prop_fresh_neq'' :: Bool
 prop_fresh_neq'' = let x = unsafeUnNom (freshName ()) in x == x
 
 -- | But if we unpack a single fresh name monadically, we can compare it for equality.
-prop_fresh_eq :: Name () -> Bool 
-prop_fresh_eq a = unNom $ do -- Nom monad
-   return $ a == a
+prop_fresh_eq :: Bool 
+prop_fresh_eq = 
+   let x' = freshName () in 
+   unNom $ do -- Nom monad
+      x <- x'
+      return $ x == x
 
 -- | @~ (n # (n,n'))@
 prop_isFresh1 :: Name () -> Name () -> Bool 

@@ -10,15 +10,12 @@ Portability : POSIX
 Nominal theory of names and swappings
 -}
 
-{-# LANGUAGE TemplateHaskell       #-}  -- needed for QuickCheck test generation
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE UndecidableInstances  #-}  -- needed for Num a => Nameless a
 {-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeSynonymInstances  #-}
--- {-# LANGUAGE OverlappingInstances  #-}  
 {-# LANGUAGE PartialTypeSignatures #-}  
 
 module Language.Nominal.Names 
@@ -50,7 +47,7 @@ newtype Atom = Atom Unique
 
 -- | Display atoms 
 instance Show Atom where
-   show (Atom a) = "_" ++ (show (hashUnique a)) 
+   show (Atom a) = "_" ++ show (hashUnique a)
 {--   show a = fromMaybe ("_" ++ (show (hashUnique a))) (do -- Maybe monad
       i <- elemIndex a myatoms
       return $ myatomnames !! i) 
@@ -73,12 +70,12 @@ nameAtom (Name(_, atm)) = atm
 -- | Names are equal when they refer to the same atom.
 -- Labels are not considered. 
 instance Eq (Name t) where
-   Name (_, atm1) == Name (_, atm2) = (atm1 == atm2) 
+   Name (_, atm1) == Name (_, atm2) = atm1 == atm2 
 
 instance Show t => Show (Name t) where
-   show nam = (show $ nameLabel nam) ++ (show $ nameAtom nam)
+   show nam = show (nameLabel nam) ++ show (nameAtom nam)
 instance {-# OVERLAPPING #-} Show (Name ()) where
-   show nam = "n" ++ (show $ nameAtom nam)
+   show nam = "n" ++ show (nameAtom nam)
 
 -- | Create a fresh name with the specified label, inside the IO monad.
 freshNameIO :: Maybe t -> IO (Name t)
@@ -111,8 +108,8 @@ type Perm a = [(a,a)]
 -- | Types that admit a swapping action.  A swapping (a b) maps a to b and b to a and leaves all other names unchanged.  Swappings are invertible, which allows them to commute through type-formers containing negative arities, e.g. the left-hand argument of function arrow.  A permutation is just a chain of swappings.
 class Swappable t a where
    swp :: Name t -> Name t -> a -> a          --  swap n and n' in a
-   perm :: (Perm (Name t)) -> a -> a          --  chain swappings 
-   perm = chain . map (\(n1,n2) -> swp n1 n2)  
+   perm :: Perm (Name t) -> a -> a          --  chain swappings 
+   perm = chain . map (uncurry swp)  
 
 instance (Swappable t a, Swappable t b) => Swappable t (a,b) where
    swp n1 n2 (a,b) = (swp n1 n2 a, swp n1 n2 b) 
@@ -126,7 +123,7 @@ instance Swappable t a => Swappable t [a] where
 
 -- | swappability distributes over function types, because functions inherit swapping action pointwise
 instance (Swappable t a, Swappable t b) => Swappable t (a -> b) where
-   swp n1 n2 f = \a -> swp n1 n2 (f (swp n1 n2 a))
+   swp n1 n2 f = swp n1 n2 . f . swp n1 n2 
 
 -- | swappability distributes over map types, because functions inherit swapping action pointwise
 instance (Swappable t a, Swappable t b, Ord a) => Swappable t (DM.Map a b) where
@@ -145,10 +142,10 @@ instance Swappable n t => Swappable n (Maybe t) where
 -- | Base case for swapping: t-labelled names acting on themselves.
 -- Only atoms are swapped; labels aren't touched; counterintuitive if label is display name, but arguably stands a better chance of being the right thing if label is a type or carries other semantic information.
 swp' :: Name t -> Name t -> Name t -> Name t
-swp' n1 n2 n = 
-   if      n == n1 then nameOverwriteLabel (nameLabel n1) n2 
-   else if n == n2 then nameOverwriteLabel (nameLabel n2) n1 
-   else                 n 
+swp' n1 n2 n 
+   | n == n1   = nameOverwriteLabel (nameLabel n1) n2 
+   | n == n2   = nameOverwriteLabel (nameLabel n2) n1 
+   | otherwise = n
 
 
 -- Need {-# LANGUAGE OverlappingInstances #-} for these two

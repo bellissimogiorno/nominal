@@ -10,14 +10,12 @@ Portability : POSIX
 Nominal-flavoured implementation of data in a context of local names
 -}
 
-{-# LANGUAGE TemplateHaskell       #-}  -- needed for QuickCheck test generation
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE UndecidableInstances  #-}  -- needed for Num a => Nameless a
 {-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeSynonymInstances  #-}
 -- {-# LANGUAGE OverlappingInstances  #-}  
 {-# LANGUAGE PartialTypeSignatures #-}  
 
@@ -29,7 +27,6 @@ module Language.Nominal.Nom
 import           Control.Monad
 import qualified Data.Map as DM 
 import           System.IO.Unsafe (unsafePerformIO)
-
 
 import Language.Nominal.Names 
 
@@ -119,7 +116,7 @@ freshName' = Nom $ do -- IO monad
 freshenNomBody :: Swappable t a => ([Name t], a) -> IO ([Name t], a)
 freshenNomBody (nams, a) = do -- IO monad
    nams' <- freshNamesIO nams
-   return $ (nams', perm (zip nams' nams) a)
+   return (nams', perm (zip nams' nams) a)
 
 -- | Wraps 'a' in a name-binding context, binding 'names'.
 res :: Swappable t a => [Name t] -> a -> Nom t a
@@ -131,11 +128,11 @@ resM nams x = x >>= res nams
 
 -- | atFresh f returns the value of f at a fresh name with label 'Just t'
 atFresh :: t -> (Name t -> a) -> Nom t a
-atFresh t f = f <$> (freshName t)
+atFresh t f = f <$> freshName t
 
 -- | atFresh' f returns the value of f at a fresh name with label 'Nothing'
 atFresh' :: (Name t -> a) -> Nom t a
-atFresh' f = f <$> (freshNameNom Nothing)
+atFresh' f = f <$> freshNameNom Nothing
 
 -- | Map f to res n. f(n) for fresh n
 resF :: (Name t -> Nom t a) -> Nom t a

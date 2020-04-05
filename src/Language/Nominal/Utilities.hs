@@ -10,20 +10,15 @@ Portability : POSIX
 Helper functions 
 -}
 
-{-# LANGUAGE TemplateHaskell       #-}  -- needed for QuickCheck test generation
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE UndecidableInstances  #-}  -- needed for Num a => Nameless a
 {-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeSynonymInstances  #-}
--- {-# LANGUAGE OverlappingInstances  #-}  
 {-# LANGUAGE PartialTypeSignatures #-}  
 
 module Language.Nominal.Utilities 
-{-    ( Name, nameLabel, Nom(..), res, resM, resF, fresh, errName, unNom, unsafeUnNom, Abs(..), absFresh, absByName, absFuncOut, (@@), (@@@), Sub(..), Cong(..), repeatedly
-    ) -}
     where
 
 import           Data.List
@@ -62,6 +57,7 @@ toMaybe False _ = Nothing
  
 -- | List subset.  Surely this must be in a library somewhere.
 isSubsetOf :: Eq a => [a] -> [a] -> Bool 
-isSubsetOf l1 l2 = all (\a1 -> elem a1 l2) l1
+isSubsetOf l1 l2 = all (`elem` l2) l1
+
 
 

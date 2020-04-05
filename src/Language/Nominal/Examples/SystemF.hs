@@ -10,7 +10,6 @@ Portability : POSIX
 Syntax and reductions of @System F@ using the Nominal datatypes package
 -}
 
-{-# LANGUAGE TemplateHaskell #-} -- needed for QuickCheck test generation
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -60,7 +59,7 @@ instance Cong Typ where
 -- | Swap type atoms in a type
 instance Swappable NTyp Typ where
    swp n1 n2 (TVar n)      = TVar $ swp' n1 n2 n
-   swp n1 n2 (t' :-> t)    = (swp n1 n2 t') :-> (swp n1 n2 t)
+   swp n1 n2 (t' :-> t)    = swp n1 n2 t' :-> swp n1 n2 t
    swp n1 n2 (All (Abs f)) = All $ Abs $ swp n1 n2 f
 
 -- | Swap term atoms in a type name (trivial action)
@@ -72,7 +71,7 @@ instance Swappable NTrm Typ where
  
 -- | Substitution acts on type variables.  Nominal package takes care of capture-avoidance.
 instance Sub NTyp Typ Typ where
-   sub :: (Name NTyp) -> Typ -> Typ -> Typ 
+   sub :: Name NTyp -> Typ -> Typ -> Typ 
    sub a t = cong $ \case
       (TVar n) -> toMaybe (a == n) t 
       _        -> Nothing
@@ -203,15 +202,14 @@ nf s = case typeOf s of
    Nothing -> Nothing 
    where -- behaviour on untypable terms is undefined
    nf_ :: Trm -> Trm
-   nf_ x = (cong $ \case 
-         TApp (TLam x') t2 -> Just . nf_ $ subM x' t2
-         App  (Lam x')  s2 -> Just . nf_ $ subM x' (nf_ s2)
-         _                 -> Nothing) x
+   nf_ = cong $ \case 
+            TApp (TLam x') t2 -> Just . nf_ $ subM x' t2
+            App  (Lam x')  s2 -> Just . nf_ $ subM x' (nf_ s2)
+            _                 -> Nothing
 
 -- | Normal form; raise error if none
 nf' :: Trm -> Trm 
-nf' s = fromMaybe (error ("Type error: " ++ (ppp s))) (nf s) 
--- nf' s = fromMaybe (error ("Type error")) (nf s) 
+nf' s = fromMaybe (error ("Type error: " ++ ppp s)) (nf s) 
 
 -- | True if term is normalisable; false if not. 
 normalisable :: Trm -> Bool
@@ -256,7 +254,7 @@ class PP a where
 
 -- | Pretty-print type variable 
 instance PP (Name NTyp) where
-   ppp n = (fromMaybe "Nothing" (nameLabel n)) ++ "(" ++ (show $ nameAtom n) ++ ")" 
+   ppp n = fromMaybe "Nothing" (nameLabel n) ++ "(" ++ show (nameAtom n) ++ ")" 
 
 -- | Pretty-print type 
 instance PP Typ where
@@ -274,7 +272,7 @@ instance PP Typ where
 -- | Pretty-print term variable 
 instance PP (Name NTrm) where
 --   ppp n = show $ nameLabel n
-   ppp n = fromMaybe "Nothing" ((\(s, t) -> s ++ ":" ++ ppp t) <$> nameLabel n) ++ "(" ++ (show $ nameAtom n) ++ ")" 
+   ppp n = maybe "Nothing" (\(s, t) -> s ++ ":" ++ ppp t) (nameLabel n) ++ "(" ++ show (nameAtom n) ++ ")" 
 
 -- Forall ∀
 -- Capital Lambda Λ = \0923
@@ -306,12 +304,12 @@ instance PP Trm where
 instance {-# OVERLAPS #-} Show Trm where
    show = ppp
 instance {-# OVERLAPS #-} Show (Maybe Trm) where
-   show a = fromMaybe "No term!" (ppp <$> a)
+   show = maybe "No term!" ppp
 
 instance {-# OVERLAPS #-} Show Typ where
    show = ppp
 instance {-# OVERLAPS #-} Show (Maybe Typ) where
-   show a = fromMaybe "No type!" (ppp <$> a)
+   show = maybe "No type!" ppp
 
 
 
@@ -344,15 +342,15 @@ instance {-# OVERLAPS #-} Show (Maybe Typ) where
 
 -- | Build type quantification from function: f ↦ ∀ a.(f a) for fresh a
 tall :: NTyp -> (Typ -> Typ) -> Typ 
-tall s f = All $ absFresh s (\n -> f (TVar n))
+tall s f = All $ absFresh s (f . TVar)
 
 -- | Build type lambda from function: f ↦ Λ a.(f a) for fresh a
 tlam :: NTyp -> (Typ -> Trm) -> Trm
-tlam s f = TLam $ absFresh s (\n -> f (TVar n))
+tlam s f = TLam $ absFresh s (f . TVar)
 
 -- | Build term lambda from function: f ↦ λ a.(f a) for fresh a
 lam :: NTrm -> (Trm -> Trm) -> Trm
-lam (s,ty) f = Lam $ absFresh (s, ty) (\n -> f (Var n))
+lam (s,ty) f = Lam $ absFresh (s, ty) (f . Var)
 
 -- | Term-to-term application
 (@.) :: Trm -> Trm -> Trm
@@ -370,11 +368,12 @@ idTrm :: Trm
 idTrm = TLam $ absFresh "X" (\xx -> Lam $ absFresh ("x", TVar xx) (\x -> Var x))
 -- | Another rendering of polymorphic identity term
 idTrm2 :: Trm
-idTrm2 = tlam "X" $ \xx -> lam ("x", xx) $ \x -> x
+idTrm2 = tlam "X" $ \xx -> lam ("x", xx) $ \x -> x -- hlint complains about \x -> x.  retained for clarity
 
 -- | 0 = λX λs:X->X λz:X.z
 zero :: Trm
-zero = tlam "X" $ \xx -> lam ("s", xx :-> xx) $ \_s -> lam ("z", xx) $ \z -> z
+zero = tlam "X" $ \xx -> lam ("s", xx :-> xx) $ \_s -> lam ("z", xx) $ \z -> z  -- hlint complains about \x -> x.  retained for clarity
+
 
 -- | suc = λx:(∀X.(X->X)->X->X) X s:X->X z:X.s(n[X] s z)
 suc :: Trm
@@ -395,7 +394,7 @@ nat = tall "X" $ \xx -> (xx :-> xx) :-> (xx :-> xx)
 -- | Cast an Int to the corresponding Church numeral.
 church :: Int -> Trm
 church 0 = zero
-church i = suc @. (church (i-1))
+church i = suc @. church (i-1)
 
 -- | Transformer type = ∀X.X->X
 transform :: Typ

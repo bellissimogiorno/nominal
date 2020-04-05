@@ -17,7 +17,7 @@ prop_Abs_Conc n x = isFresh n x ==> (absByName n (conc x n) === x)
 
 -- | @n' # x => [n]x = [n'](n' n).x@
 prop_Abs_alpha :: Name () -> Name () -> [Name()] -> Property
-prop_Abs_alpha n n' l = (isFresh n' l) ==> (absByName n l === absByName n' (swp n' n l))
+prop_Abs_alpha n n' l = isFresh n' l ==> (absByName n l === absByName n' (swp n' n l))
 
 -- | @(n.x) \@ n = x@
 prop_Conc_Abs :: Name () -> [Name ()] -> Property 
@@ -44,7 +44,7 @@ prop_unfuse_fuse_Abs' (a1, a2) = expectFailure ( (unfuse . fuse) (a1, a2) === (a
 
 -- | Atm.X iso Nom (Atm x X)
 prop_abs_to_nom :: Abs Int [Name Int] -> Bool
-prop_abs_to_nom x' = x' == (nomToAbs (absToNom x'))
+prop_abs_to_nom x' = x' == nomToAbs (absToNom x')
 
 {-- | expect failure here only because of local scopes
 prop_nom_to_abs' :: Nom Int (Name Int, [Name Int]) -> Property 

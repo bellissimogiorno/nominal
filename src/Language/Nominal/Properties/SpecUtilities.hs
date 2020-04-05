@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -17,16 +16,20 @@ import Language.Nominal.Nom
 import Language.Nominal.Abs
 import Language.Nominal.Examples.SystemF
 
+singleton :: a -> [a]
+singleton a = [a]
+
 myatomnames :: [String]
 myatomnames = map show [0 :: Int .. 9]
 
 myatoms :: [Atom]
+{-# NOINLINE myatoms #-}  -- play safe because of unsafePerformIO
 myatoms = unsafePerformIO $ mapM (\_x -> Atom <$> newUnique) myatomnames 
 
 -- | We only care about short and simple strings
 instance {-# OVERLAPPING #-} Arbitrary String where
 --   arbitrary = getPrintableString <$> arbitrary 
-   arbitrary = elements $ map (\x -> [x]) (['a'..'z']++['A'..'Z'])
+   arbitrary = elements $ map singleton (['a'..'z']++['A'..'Z'])
 
 -- | Pick an atom
 instance Arbitrary Atom where
@@ -51,13 +54,13 @@ instance (Swappable t a, Arbitrary (Name t), Arbitrary a) => Arbitrary (Abs t a)
    arbitrary = do -- Gen monad
       nam <- arbitrary
       a   <- arbitrary
-      return $ absByName nam a
+      return $ absByName nam a  -- hlint suggestion ignored
 
 instance (Swappable t a, Arbitrary (Name t), Arbitrary a) => Arbitrary (Nom t a) where
    arbitrary = do -- Gen monad
       nams <- arbitrary
-      a   <- arbitrary
-      return $ res nams a
+      a    <- arbitrary
+      return $ res nams a   -- hlint suggestion ignored
 
 
 -- | For QuickCheck tests: pick a type
@@ -69,7 +72,7 @@ arbitrarySizedTyp :: Int -> Gen Typ
 arbitrarySizedTyp m = 
   if m < 2 then 
      TVar <$> arbitrary 
-  else do -- Gen monad
+  else 
      oneof [TVar <$> arbitrary
            ,do -- Gen monad
                t1 <- arbitrarySizedTyp (m `div` 2) 
@@ -90,7 +93,7 @@ arbitrarySizedTrm :: Int -> Gen Trm
 arbitrarySizedTrm m = 
   if m < 2 then 
      Var <$> arbitrary 
-  else do -- Gen monad
+  else 
      oneof [Var <$> arbitrary
            ,do -- Gen monad
                t1 <- arbitrarySizedTrm (m `div` 2) 

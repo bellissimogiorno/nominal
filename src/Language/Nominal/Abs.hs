@@ -11,15 +11,12 @@ Name-abstraction, nominal style
 -}
 
 
-{-# LANGUAGE TemplateHaskell       #-}  -- needed for QuickCheck test generation
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE UndecidableInstances  #-}  -- needed for Num a => Nameless a
 {-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeSynonymInstances  #-}
--- {-# LANGUAGE OverlappingInstances  #-}  
 {-# LANGUAGE PartialTypeSignatures #-}  
 
 module Language.Nominal.Abs 
@@ -85,7 +82,7 @@ fuse (Abs (t1, f1), Abs (_, f2)) =
 -- | Split two abstractions
 unfuse :: Abs t (a1, a2) -> (Abs t a1, Abs t a2) 
 unfuse (Abs (t, f)) = 
-   (Abs (t, \n -> fst (f n)), Abs (t, \n -> snd (f n)))
+   (Abs (t, fst . f), Abs (t, snd . f))
 
 
 
@@ -96,10 +93,10 @@ unfuse (Abs (t, f)) =
 instance (Eq t, Eq a) => Eq (Abs t a) where
    Abs (t1, f1) == Abs(t2, f2) = 
       (t1 == t2) && 
-      (unsafeUnNom $ do -- Nom monad
+      unsafeUnNom (do -- Nom monad
          nam <- freshNameNom t1
          return $ f1 nam == f2 nam
-      )
+         )
 
 -- mjg swp overlap here
 -- mjg explain
@@ -118,7 +115,7 @@ instance Functor (Abs t) where
 
 instance Applicative (Abs t) where
    pure  :: a -> Abs t a
-   pure a = Abs (Nothing, \_ -> a)
+   pure a = Abs (Nothing, const a)
    (<*>) :: Abs t (a -> b) -> Abs t a -> Abs t b
    (<*>) (Abs (tg, g)) (Abs (_, a)) = Abs (tg, \nam -> let nam' = nameOverwriteLabel tg nam in g nam' $ a nam') -- must choose one of the two labels
 
@@ -126,7 +123,7 @@ instance Applicative (Abs t) where
 -- | Apply f to a fresh element with label @Just t@
 absFresh :: Swappable t a => t -> (Name t -> a) -> Abs t a
 -- absFresh f = Abs f
-absFresh t f = unsafeUnNom . (atFresh t) $ \m -> absByName m (f m)
+absFresh t f = unsafeUnNom . atFresh t $ \m -> absByName m (f m)
 
 -- | Apply f to a fresh element with label `Nothing` 
 absFresh' :: Swappable t a => (Name t -> a) -> Abs t a
@@ -136,5 +133,5 @@ absFresh' f = unsafeUnNom . atFresh' $ \m -> absByName m (f m)
 -- [mjg improve exposition]
 -- | near inverse to applicative distribution; absFuncIn . absFuncOut = id but not necessarily other way around 
 absFuncOut :: Swappable n a => (Abs n a -> Abs n b) -> Abs n (a -> b)
-absFuncOut f = Abs (Nothing, \nam -> \a -> conc (f (absByName nam a)) nam)
+absFuncOut f = Abs (Nothing, \nam a -> conc (f (absByName nam a)) nam)
 

@@ -12,7 +12,7 @@ import Language.Nominal.Examples.SystemF
 
 -- | y[n-> var n] = y
 iprop_sub_id :: (Sub n x y, Eq y) => (Name n -> x) -> Name n -> y -> Bool 
-iprop_sub_id f n y = (y == sub n (f n) y)
+iprop_sub_id f n y = y == sub n (f n) y
 prop_sub_id_typevar' :: Name NTyp -> Typ -> Bool 
 prop_sub_id_typevar' = iprop_sub_id TVar 
 prop_sub_id_termvar :: Name NTrm -> Trm -> Bool 
@@ -33,7 +33,7 @@ prop_sub_fresh_termvar = iprop_sub_fresh
 
 -- | n' # y => y[n->n'] = (n' n).y
 iprop_sub_perm :: (Sub n x y, Eq y, Show y) => (Name n -> x) -> Name n -> Name n -> y -> Property 
-iprop_sub_perm f n n' y = isFresh n' y ==> ((sub n (f n') y) === swp n' n y)
+iprop_sub_perm f n n' y = isFresh n' y ==> sub n (f n') y === swp n' n y
 prop_sub_perm_typevar' :: Name NTyp -> Name NTyp -> Typ -> Property 
 prop_sub_perm_typevar' = iprop_sub_perm TVar 
 -- this one trapped an error
@@ -47,7 +47,7 @@ prop_sub_perm_termvar = iprop_sub_perm Var
 
 -- | (id id) has no type (it needs a type argument)
 prop_untypable :: Bool 
-prop_untypable = typeOf (App idTrm idTrm) == Nothing
+prop_untypable = isNothing $ typeOf (App idTrm idTrm) 
 
 -- | Not all terms are typable
 prop_all_typable :: Trm -> Property 
@@ -55,10 +55,10 @@ prop_all_typable t = expectFailure $ typable t
 
 
 prop_typable_nf :: Trm -> Property
-prop_typable_nf = \t -> typable t ==> normalisable t
+prop_typable_nf t = typable t ==> normalisable t
 
 prop_nf_typable :: Trm -> Property
-prop_nf_typable = \t -> normalisable t ==> typable t
+prop_nf_typable t = normalisable t ==> typable t
 
 -- | Type soundness
 -- If a term is typable and normalisable then its normal form has the same type as it does. 
@@ -71,7 +71,7 @@ prop_id_type_unchanged t = typable t ==> typeOf t === typeOf (App (TApp idTrm (t
 
 -- | If x : t then (id t x) --> x
 prop_app_id :: Trm -> Property 
-prop_app_id t = typable t ==> (nf' t) === (nf' $ App (TApp idTrm (typeOf' t)) t) 
+prop_app_id t = typable t ==> nf' t === nf' $ App (TApp idTrm (typeOf' t)) t
 
 {-- prop_typable_sub :: Name NTrm -> Trm -> Trm -> Property
 prop_typable_sub n t1 t2 = typable t1 ==> typable t2 ==> typable $ sub n t1 t2 --}
