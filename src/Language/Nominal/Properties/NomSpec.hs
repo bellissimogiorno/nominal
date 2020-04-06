@@ -1,8 +1,6 @@
 module Language.Nominal.Properties.NomSpec
     where
 
-import Test.QuickCheck
-
 import Language.Nominal.Names 
 import Language.Nominal.Nom
 

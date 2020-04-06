@@ -7,6 +7,7 @@ import Language.Nominal.Names
 import Language.Nominal.Nom
 import Language.Nominal.Sub
 import Language.Nominal.Examples.SystemF
+import Data.Maybe
 
 -- * Substitution
 
@@ -71,7 +72,7 @@ prop_id_type_unchanged t = typable t ==> typeOf t === typeOf (App (TApp idTrm (t
 
 -- | If x : t then (id t x) --> x
 prop_app_id :: Trm -> Property 
-prop_app_id t = typable t ==> nf' t === nf' $ App (TApp idTrm (typeOf' t)) t
+prop_app_id t = typable t ==> (nf' t) === (nf' $ App (TApp idTrm (typeOf' t)) t)
 
 {-- prop_typable_sub :: Name NTrm -> Trm -> Trm -> Property
 prop_typable_sub n t1 t2 = typable t1 ==> typable t2 ==> typable $ sub n t1 t2 --}
