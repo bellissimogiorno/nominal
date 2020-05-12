@@ -1,0 +1,19 @@
+
+{- $blurb 
+
+The interaction of name-binding with data can be tricky.  Examples include:
+
+* Inductively defining syntax and reductions of a syntax with binding, e.g. lambda-calculus.  An example is in "Language.Nominal.Examples.SystemF".
+* Graph-like structures, especially if they have dangling pointers.  An example is in "Language.Nominal.Examples.IdealisedEUTxO".
+
+This package implements a solution in Haskell, based on names and swappings.  With it, you can define data with name-binding and program on this data in a manner closely mirroring informal practice.
+
+Features include:
+
+* This is a package; no need to use a modified compiler.
+* No state monad is imposed.  Binding environments like @'Nom'@ and @'Abs'@ are available, but they track local scope not global scope and are relatively easy to escape.
+* No distinction is imposed between free names and bound names.  Names are just another datatype whose values can be freely passed around.  Binding operators are just datatype constructors.
+* Capture-avoidance is taken care of in the background.
+* A well-understood mathematical reference model is available, in nominal techniques as referenced in <https://link.springer.com/article/10.1007/s001650200016 a new approach to abstract syntax with variable binding> (see also <http://www.gabbay.org.uk/papers.html#newaas-jv author's pdfs>).
+
+-}

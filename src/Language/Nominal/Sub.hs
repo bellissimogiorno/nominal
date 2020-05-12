@@ -7,70 +7,105 @@ Maintainer  : murdoch.gabbay@gmail.com
 Stability   : experimental
 Portability : POSIX
 
-Nominal treatment of substitution
+Typeclass for types that support a substitution action.  Capture-avoidance is automatic, provided you used @'Nom'@ or @'Abs'@ types for binding, of course.  
+
+See "Language.Nominal.Examples.SystemF" for usage examples. 
 -}
 
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE UndecidableInstances  #-}  -- needed for Num a => Nameless a
-{-# LANGUAGE InstanceSigs          #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE TupleSections         #-}
--- {-# LANGUAGE OverlappingInstances  #-}  
-{-# LANGUAGE PartialTypeSignatures #-}  
+{-# LANGUAGE ConstraintKinds       
+           , DataKinds             
+           , DefaultSignatures     
+           , DerivingVia           
+           , EmptyCase             
+           , FlexibleContexts      
+           , FlexibleInstances     
+           , InstanceSigs          
+           , MultiParamTypeClasses 
+           , PartialTypeSignatures   
+           , PolyKinds               
+           , StandaloneDeriving      
+           , TupleSections         
+           , TypeOperators         
+#-}
 
-module Language.Nominal.Sub 
+module Language.Nominal.Sub
+   ( -- * Substitution
+     KSub (..)
+   , Sub
+   -- * Test
+   -- $test
+   ) 
     where
 
+import GHC.Generics         
+-- import Type.Reflection 
+import Data.List.NonEmpty (NonEmpty)
 
-import Language.Nominal.Names 
-import Language.Nominal.Nom
-import Language.Nominal.Abs
-
+import Language.Nominal.Name 
 
 -- * Substitution
 
--- | @sub n x y@ and @subM n.x y@ correspond to 'y[n->x]'.  
-class Swappable n y => Sub n x y where
-   sub  :: Name n -> x -> y -> y
-   sub n x y = subM (absByName n y) x
-   subM :: Abs n y -> x -> y
-   subM y' x = y' @@ \n y -> sub n x y
+-- | Substitution.  @sub n x y@ corresponds to "substitute the name n for the datum x in y".
+--
+-- We intend that @n@ should be a type of names @KName k n@. 
+class KSub n x y where
+    sub :: n -> x -> y -> y
+    -- We could reasonably insert a MINIMAL condition here, but in this case we don't because there's a default instance. 
+    default sub :: (Generic y, GSub n x (Rep y)) => n -> x -> y -> y
+    sub n x = to . gsub n x . from
 
--- | sub on names
-instance Sub n (Name n) (Name n) where
-   sub n n' a = if a == n then n' else a
--- instance Sub n (Name n) (Name n) where
---   subM (Abs f) n = f n
+-- | Canonical instance for the unit atom sort
+type Sub n x y = KSub (KName 'Tom n) x y
 
--- | sub on name-contexts 
-instance Swappable n a => Sub n a (Name n -> a) where
-   sub n x k = \n' -> if n' == n then x else k n'  -- hlint redundant lambda warning ignored for (IMO) clarity
 
--- | sub on tuples 
-instance (Sub n x a, Sub n x b) => Sub n x (a,b) where
-   sub n x (a,b) = (sub n x a, sub n x b)
-instance (Sub n x a, Sub n x b, Sub n x c) => Sub n x (a,b,c) where
-   sub n x (a,b,c) = (sub n x a, sub n x b, sub n x c)
-
--- | sub on lists 
-instance Sub n x a => Sub n x [a] where
-   sub n x a' = sub n x <$> a'
-
--- | sub on Maybe 
-instance Sub n x a => Sub n x (Maybe a) where
-   sub n x a' = sub n x <$> a'
+-- order: nameless, tuple, list, nonempty list, maybe, sum, nom 
 
 -- | sub on nameless type is trivial
-instance {-# OVERLAPPABLE #-} Nameless a => Sub n x a where
-   sub _ _ a = a
+instance KSub n x (Nameless a) where
+   sub _ _ = id
 
-{-- Substitution on an abstraction substitutes in the label and capture-avoidingly in the body
-instance (Swappable n y, Sub n x t, Sub n x y) => Sub n x (Abs t y) where
-   sub n x y' = (y', sub n x) @@@
-                  \a y -> absByName a (sub n x y) -}
--- mjg swp overlap here
+deriving via Nameless Bool instance KSub n x Bool
+deriving via Nameless Int instance KSub n x Int
+deriving via Nameless () instance KSub n x ()
+deriving via Nameless Char instance KSub n x Char
 
--- | sub on a nominal abstraction substitutes in the label, and substitutes capture-avoidingly in the body
-instance (Sub n x t, Sub n x y, Swappable n (Name t)) => Sub n x (Abs t y) where
-   sub n x (Abs (t', f)) = Abs (sub n x <$> t', sub n x . f . nameOverwriteLabel t')
+instance (KSub n x a, KSub n x b) => KSub n x (a, b)
+instance (KSub n x a, KSub n x b, KSub n x c) => KSub n x (a, b, c)
+instance (KSub n x a, KSub n x b, KSub n x c, KSub n x d) => KSub n x (a, b, c, d)
+instance (KSub n x a, KSub n x b, KSub n x c, KSub n x d, KSub n x e) => KSub n x (a, b, c, d, e)
+instance KSub n x a => KSub n x [a]
+instance KSub n x a => KSub n x (NonEmpty a)
+instance KSub n x a => KSub n x (Maybe a)
+instance (KSub n x a, KSub n x b) => KSub n x (Either a b)
+
+
+-- | sub on names
+instance KSub (KName s n) (KName s n) (KName s n) where -- We could legitimately insist on Typeable (s :: k), KSwappable k n, Eq n here, but we do not because names are compared for equality by atom.
+   sub n n' a = if a == n then n' else a 
+
+
+-- * Generics support for @'KSub'@
+
+class GSub n x f where
+    gsub :: n -> x -> f w -> f w 
+
+instance GSub n x V1 where
+    gsub _ _ y = case y of
+
+instance GSub n x U1 where
+    gsub _ _ = id
+
+instance GSub n x f => GSub n x (M1 i t f) where
+    gsub n x = M1 . gsub n x . unM1
+
+instance KSub n x c => GSub n x (K1 i c) where
+    gsub n x = K1 . sub n x . unK1
+
+instance (GSub n x f, GSub n x g) => GSub n x (f :*: g) where
+    gsub n x (y :*: z) = gsub n x y :*: gsub n x z
+
+instance (GSub n x f, GSub n x g) => GSub n x (f :+: g) where
+    gsub n x (L1 y) = L1 $ gsub n x y
+    gsub n x (R1 z) = R1 $ gsub n x z
+
+{- $tests Property-based tests are in "Language.Nominal.Properties.SubSpec". -}

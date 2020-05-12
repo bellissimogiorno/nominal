@@ -1,50 +1,127 @@
 {-|
 Module      : System F 
-Description : Syntax and reductions of System F using the Nominal datatypes package
+Description : Syntax and reductions of System F using the Nominal package
 Copyright   : (c) Murdoch J. Gabbay, 2020
 License     : GPL-3
 Maintainer  : murdoch.gabbay@gmail.com
 Stability   : experimental
 Portability : POSIX
 
-Syntax and reductions of @System F@ using the Nominal datatypes package
+Syntax and reductions of System F using the Nominal package
 -}
 
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DataKinds             
+           , InstanceSigs          
+           , DeriveAnyClass        
+           , DeriveGeneric         
+           , MultiParamTypeClasses 
+           , FlexibleInstances     
+           , LambdaCase            
+           , PolyKinds             
+           , DefaultSignatures     
+           , DeriveAnyClass        
+           , DeriveGeneric         
+           , EmptyCase             
+           , FlexibleInstances     
+           , FlexibleContexts       -- so we can write `Swappable d`
+           , InstanceSigs          
+           , LambdaCase            
+           , MultiParamTypeClasses 
+           , StandaloneDeriving    
+           , TypeOperators         
+           , UndecidableInstances  
+#-}
 
 
 module Language.Nominal.Examples.SystemF 
---    ( 
---    )
+    ( 
+-- * Introduction
+-- $intro
+    AKind (..),
+-- * System F types 
+    NTypLabel, NTyp, Typ (..), typRecurse,
+-- * System F terms
+    NTrmLabel, NTrm, Trm (..), typeOf, typeOf', typable,  
+-- * Normal forms
+    nf, nf', normalisable,
+-- * Pretty-printer
+    PP (..),  
+-- * Helper functions for building terms 
+    tall, tlam, lam, (@.), (@@.),
+-- * Example terms
+    idTrm, idTrm2, zero, suc, one, nat, church, transform, selfapp
+-- * Tests
+-- $tests
+    )
     where
 
 import Data.Maybe
+import GHC.Generics
 
 import Language.Nominal.Utilities 
-import Language.Nominal.Names 
+import Language.Nominal.Name 
 -- import Language.Nominal.Nom
 import Language.Nominal.Abs 
 import Language.Nominal.Sub 
 
------------------------------------------------
--- System F 
+{- $intro
 
-------------------------------------
--- System F types 
+System F is a classic example and has some interesting features:
+
+* Two kinds of variable: /type variables/and /term variables/.
+* Three kinds of binding: /type forall/ binding a type variable in a type; /term lambda/ binding a term variable in a term; and /type lambda/ binding a type variable in a term.
+* A static assignment of semantic information to term variables, namely: a /type assignment/.  Thus intuitively term variables carry labels (types), which themselves may contain type variables.
+* And it's an expressive system of independent mathematical interest.
+
+So implementing System F is a natural test for this package.
+We start with atoms:
+ 
+-}
+
+-- * Atoms
+
+-- | With @DataKinds@, this datatype gives us the following:
+--
+-- * A kind of atoms @AKind@, containing two sorts:
+-- * @ATyp@ a sort of atoms to identify type variables @'NTyp'@, and
+-- * @ATrm@ a sort of atoms to identify term variables @'NTrm'@.
+--
+-- See 'Language.Nominal.Name.Tom' for more discussion of how this works.
+data AKind = ATyp -- Atoms for type variable names 'NTyp' 
+           | ATrm -- Atoms for term variable names 'NTrm'
+
+
+-- * System F types 
 
 -- | A type variable is labelled just by a display name
-type NTyp = String
+type NTypLabel = String 
+-- | A type variable name.  Internally, this consists of
+--
+-- * an atom of type @KAtom 'ATyp@, and
+-- * a label of type @'NTypLabel'@, which is just a display name in @'String'@. 
+type NTyp = KName 'ATyp NTypLabel
 
 -- | Datatype of System F types 
+--
+-- We use @Generic@ to deduce a swapping action for atoms of sorts @''ATyp'@ and @''ATrm'@ (i.e. of kind @AKind@). 
+-- Just once, we spell out the definition implicit in the generic instance:  
+--
+-- > instance KSwappable AKind Typ where
+-- >    swpN n1 n2 (TVar n)   = TVar $ swpN n1 n2 n
+-- >    swpN n1 n2 (t' :-> t) = swpN n1 n2 t' :-> swpN n1 n2 t
+-- >    swpN n1 n2 (All x)    = All $ swpN n1 n2 x
+--
+-- This is boring, and automated, and that's the point: swappings distribute uniformly through everything including abstractors (the @x@ under the @All@).  
+--
+-- (The mathematical reason for this is that swappings are invertible, whereas renamings and substitutions aren't.)
+--
 data Typ = 
-   TVar (Name NTyp)   -- ^ Type variable
- | Typ :-> Typ        -- ^ Type application
- | All (Abs NTyp Typ) -- ^ Type forall-abstraction
- deriving (Eq)
+   TVar NTyp           -- ^ Type variable
+ | Typ :-> Typ         -- ^ Type application
+ | All (KAbs NTyp Typ) -- ^ Type forall-abstraction
+ deriving (Eq, Generic, KSwappable AKind)
 
+-- | A congruence descends into the type.  Action on binder is automagically capture-avoiding.
 instance Cong Typ where
    congRecurse :: (Typ -> Typ) -> Typ -> Typ 
    congRecurse k = \case
@@ -52,35 +129,20 @@ instance Cong Typ where
       s1 :-> s2 -> k s1 :-> k s2
       All x     -> All $ fmap k x 
 
--- mjg invites generics
--- lars suggests newtypedriving.  extension generalisednewtypederiving
--- lars suggests generics.
--- do generics.  derive generics, derive anyclass.  deriving generics yourtypeclass.  look at haskell wiki equality & serialisation
--- | Swap type atoms in a type
-instance Swappable NTyp Typ where
-   swp n1 n2 (TVar n)      = TVar $ swp' n1 n2 n
-   swp n1 n2 (t' :-> t)    = swp n1 n2 t' :-> swp n1 n2 t
-   swp n1 n2 (All (Abs f)) = All $ Abs $ swp n1 n2 f
 
--- | Swap term atoms in a type name (trivial action)
-instance Swappable NTrm (Name NTyp) where
-   swp _ _ t = t
--- | Swap term atoms in a type (trivial action)
-instance Swappable NTrm Typ where
-   swp _ _ t = t
  
--- | Substitution acts on type variables.  Nominal package takes care of capture-avoidance.
-instance Sub NTyp Typ Typ where
-   sub :: Name NTyp -> Typ -> Typ -> Typ 
+-- | Substitution acts on type variables.  Capture-avoidance is automagical.
+instance KSub NTyp Typ Typ where
+   sub :: NTyp -> Typ -> Typ -> Typ 
    sub a t = cong $ \case
-      (TVar n) -> toMaybe (a == n) t 
+      (TVar n) -> toMaybe (a == n) t -- note name-equality is atom-wise and ignores labels 
       _        -> Nothing
 
--- | Nominal recursion scheme.  Implicit in pattern-matching plus `@@`.
-typRecurse :: (Name NTyp -> a) -> (Typ -> Typ -> a) -> (Name NTyp -> Typ -> a) -> Typ -> a 
+-- | Nominal recursion scheme.  We never use it because it's implicit in pattern-matching plus `@$`.
+typRecurse :: (NTyp -> a) -> (Typ -> Typ -> a) -> (NTyp -> Typ -> a) -> Typ -> a 
 typRecurse f1 _ _ (TVar n)    = f1 n
 typRecurse _ f2 _ (s1 :-> s2) = f2 s1 s2
-typRecurse _ _ f3 (All x')    = x' @@ f3 
+typRecurse _ _ f3 (All x')    = x' @$ f3 
 
 
 ------------------------------------
@@ -88,43 +150,36 @@ typRecurse _ _ f3 (All x')    = x' @@ f3
 
 
 -- | A term variable is labelled by a display name, and its type
-type NTrm = (String, Typ)
+type NTrmLabel = ( String -- Display name of term variable
+                 , Typ    -- Type of the term variable
+                 )
+-- | A term variable name 
+type NTrm = KName 'ATrm NTrmLabel
 
--- | Swap type variables in a term variable.  Non-trivial because a term variable carries a label which contains a type.  Action is functorial, descending into the type label. 
-instance Swappable NTyp (Name NTrm) where
-   swp n1 n2 n = swp n1 n2 <$> n
+-- | Substitute type variables with type in term variable.  
+-- Non-trivial because a term variable carries a label which contains a type.  
+-- Action is functorial, descending into the type label. 
+instance KSub NTyp Typ NTrm where
+   sub a ty' (Name lab atm) = Name (sub a ty' lab) atm
 
--- | Substitute type variables with type in term variable.  Non-trivial because a term variable carries a label which contains a type.  Action is functorial, descending into the type label. 
-instance Sub NTyp Typ (Name NTrm) where
-   sub a ty' (Name (lab, atm)) = Name (sub a ty' lab, atm) 
+-- | System F terms.  
+--
+-- * We get swapping actions automatically, and also substitution of type names @NTyp@ for types @Typ@.  
+-- * Substitution of term variables @NTrm@ for terms @Trm@ needs defined separately. 
+--
+data Trm =  Var NTrm             -- ^ Term variable, labelled by its display name and type 
+          | App Trm Trm          -- ^ Apply a term to a term  
+          | Lam (KAbs NTrm Trm)  -- ^ Nominal atoms-abstraction by a term variable. 
+          | TApp Trm Typ         -- ^ Apply a term to a type
+          | TLam (KAbs NTyp Trm) -- ^ Nominal atoms-abstraction by a type variable.   
+  deriving ( Eq
+           , Generic
+           , KSwappable AKind   --- swappings derived automatically
+           , KSub NTyp Typ      --- substitution of type names for types derived automatically
+           )
 
--- | System F terms
-data Trm =  Var  (Name NTrm)     -- ^ Term variable, labelled by its display name and type 
-          | App   Trm Trm        -- ^ Apply a term to a term  
-          | Lam  (Abs NTrm Trm)  -- ^ Nominal atoms-abstraction by a term variable. 
-          | TApp  Trm Typ        -- ^ Apply a term to a type
-          | TLam (Abs NTyp Trm)  -- ^ Nominal atoms-abstraction by a type variable.   
---  deriving (Eq, Show)
-  deriving (Eq)
-
--- | Swap term variables in a term.  
-instance Swappable NTrm Trm where
-   swp n1 n2 (Var n)        = Var $ swp' n1 n2 n               -- Actual swapping here 
-   swp n1 n2 (App t' t)     = App (swp n1 n2 t') (swp n1 n2 t) -- All other cases are generic 
-   swp n1 n2 (Lam (Abs f))  = Lam $ Abs $ swp n1 n2 f
-   swp n1 n2 (TApp t' t)    = TApp (swp n1 n2 t') (swp n1 n2 t)
-   swp n1 n2 (TLam (Abs f)) = TLam $ Abs $ swp n1 n2 f
-
--- | Swap type variables in a term.  
-instance Swappable NTyp Trm where
-   swp n1 n2 (Var n)        = Var (swp n1 n2 n)               
--- mjg delete? Functorial action; applies to label 
-   swp n1 n2 (App t' t)     = App (swp n1 n2 t') (swp n1 n2 t)
-   swp n1 n2 (Lam (Abs f))  = Lam $ Abs $ swp n1 n2 f
-   swp n1 n2 (TApp t' t)    = TApp (swp n1 n2 t') (swp n1 n2 t)
-   swp n1 n2 (TLam (Abs f)) = TLam $ Abs $ swp n1 n2 f
-
--- only good for term substitution, not type substitution
+-- This notion of congruence is good for term substitution. 
+-- (Type substitution comes from the generic instance.)
 instance Cong Trm where
    congRecurse k = \case
          Var n      -> Var n
@@ -133,17 +188,22 @@ instance Cong Trm where
          TApp s1 t2 -> TApp (k s1) t2 
          TLam x     -> TLam $ fmap k x
 
+-- | Substitute term variable with term in term
+instance KSub NTrm Trm Trm where
+   sub :: NTrm -> Trm -> Trm -> Trm 
+   sub a t = cong $ \case 
+         Var n -> toMaybe (a == n) t  -- note name-equality is atom-wise and ignores labels 
+         _     -> Nothing
+
 -- | Calculate type of term, maybe
 typeOf :: Trm -> Maybe Typ 
-typeOf (Var n)     = do -- Maybe monad
-   (_, t) <- nameLabel n
-   return t 
-typeOf (TLam x')   = x' @@ \tp tm -> do -- Maybe monad
+typeOf (Var n)     = let (_, t) = nameLabel n in Just t
+typeOf (TLam x')   = x' @$ \tp tm -> do -- Maybe monad
    typetm <- typeOf tm 
-   return $ All (absByName tp typetm) 
-typeOf (Lam x')    = x' @@ \n  tm -> do -- Maybe monad
+   return $ All (abst tp typetm) 
+typeOf (Lam x')    = x' @$ \n  tm -> do -- Maybe monad
    typetm <- typeOf tm
-   (_, t) <- nameLabel n
+   let (_, t) = nameLabel n
    return $ t :-> typetm 
 typeOf (App s1 s2) = do -- Maybe monad 
    t1a :-> t1b    <- typeOf s1
@@ -151,46 +211,15 @@ typeOf (App s1 s2) = do -- Maybe monad
    toMaybe (t1a == t2) t1b 
 typeOf (TApp s t)  = do -- Maybe monad
    All x' <- typeOf s
---   x' @@ \n' t' -> return $ sub n' t t'
-   Just $ subM x' t 
+   Just $ subM x' t -- substitution of type name for type, in type 
 
 -- | Calculate type of term; raise error if none exists
 typeOf' :: Trm -> Typ
 typeOf' s = fromMaybe (error ("Type error" ++ ppp s)) (typeOf s) 
 
--- | True if term is typable; false if not. 
+-- | @'True'@ if term is typable; @'False'@ if not. 
 typable :: Trm -> Bool
 typable = isJust . typeOf 
-
-
--- Substitution of types for type variables in terms
--- Here sub (by design) substitutes in the labels of variables at the site where they are bound.
--- This means that if unsafeUnNom has detached a variable from its surrounding binding, then sub may not find that binding and may not substitute in the variable's label.
-{-  instance Sub NTyp Typ Trm where
-   sub :: Name NTyp -> Typ -> Trm -> Trm 
-   sub a t = cong $ \case
---         Lam x -> (x, \(s,t') -> (s, sub a t t')) @@@ 
---                  \tm s -> Just . Lam . (absByName tm) $ (sub a t s)
-         Lam x -> Just . Lam $ sub a t x
-         _     -> Nothing
--}
-
--- | Substitute type variable with type in term.  Not boilerplate; must handle type labels correctly.
-instance Sub NTyp Typ Trm where
-   sub :: Name NTyp -> Typ -> Trm -> Trm 
-   sub a t (Var n)      = Var (sub a t n) 
-   sub a t (Lam x)      = Lam $ sub a t x
-   sub a t (App t1 t2)  = App (sub a t t1) (sub a t t2)
-   sub a t (TApp t1 t2) = TApp (sub a t t1) (sub a t t2)
-   sub a t (TLam x)     = TLam $ sub a t x
-
--- | Substitute term variable with term in term
-instance Sub NTrm Trm Trm where
-   sub :: Name NTrm -> Trm -> Trm -> Trm 
-   sub a t = cong $ \case 
-         Var n -> toMaybe (a == n) t 
-         _     -> Nothing
-
 
 
 -- * Normal forms
@@ -223,28 +252,27 @@ normalisable = isJust . nf
 data Sem = SemLam Typ (Sem -> Sem) | SemTLam (Typ -> Sem) 
 
 -- We get sub automagically
-type TypeVarContext = Name NTyp -> Typ
-type TermVarContext = Name NTrm -> Sem 
+type TypeVarContext = Name NTypLabel -> Typ
+type TermVarContext = Name NTrmLabel -> Sem 
 
--- mjg to restore
 sem :: TypeVarContext -> TermVarContext -> Trm -> Maybe Sem
 sem tyc tmc (Var n)      = Just $ tmc n       -- ^ Look up in the var context
 sem tyc tmc (App s1 s2)  = do -- Maybe monad
    SemLam t f <- sem tyc tmc s1 
    f <$> (sem tyc tmc s2)
-sem tyc tmc (Lam x)      = x @@ \n s -> do -- Maybe monad
+sem tyc tmc (Lam x)      = x @$ \n s -> do -- Maybe monad
    (_, nty) <- nameLabel n
    return $ SemLam nty (\x -> sem tyc (sub n x tmc) s)
 sem tyc tmc (TApp s1 t2) = do -- Maybe monad
    SemTLam f <- sem tyc tmc s1 
    return $ f t2
-sem tyc tmc (TLam x)     = x @@ \n s -> SemTLam (\x -> sem (sub n x tyc) tmc s)
+sem tyc tmc (TLam x)     = x @$ \n s -> SemTLam (\x -> sem (sub n x tyc) tmc s)
 
 -- A useful property would be that sem (t t') = sem t (sem t')
 --}
 
 ---------------------------------------------
--- Pretty-printer
+-- * Pretty-printer
 
 -- | Typeclass for things that can be pretty-printed
 class PP a where
@@ -253,14 +281,14 @@ class PP a where
    pp = putStrLn . ppp 
 
 -- | Pretty-print type variable 
-instance PP (Name NTyp) where
-   ppp n = fromMaybe "Nothing" (nameLabel n) ++ "(" ++ show (nameAtom n) ++ ")" 
+instance PP NTyp where
+   ppp n = (nameLabel n) ++ "(" ++ show (nameAtom n) ++ ")" 
 
 -- | Pretty-print type 
 instance PP Typ where
   ppp (TVar n)  = ppp n
-  --- ppp (All x)   = x @@ \n t -> '\8704':(ppp n ++ "." ++ ppp t)
-  ppp (All x)   = x @@ \n t -> '∀':(ppp n ++ "." ++ ppp t)
+  --- ppp (All x)   = x @$ \n t -> '\8704':(ppp n ++ "." ++ ppp t)
+  ppp (All x)   = x @$ \n t -> '∀':(ppp n ++ "." ++ ppp t)
   ppp (t :-> u) = pppL t ++ " -> " ++ pppR u where
     pppL (All _)      = "(" ++ ppp t ++ ")"
     pppL (_ :-> _)    = "(" ++ ppp t ++ ")"
@@ -268,25 +296,21 @@ instance PP Typ where
     pppR (All _)      = "(" ++ ppp u ++ ")"
     pppR _            = ppp u
 
--- mjg explain shownothing
 -- | Pretty-print term variable 
-instance PP (Name NTrm) where
---   ppp n = show $ nameLabel n
-   ppp n = maybe "Nothing" (\(s, t) -> s ++ ":" ++ ppp t) (nameLabel n) ++ "(" ++ show (nameAtom n) ++ ")" 
+instance PP NTrm where
+   ppp n = (\(s, t) -> s ++ ":" ++ ppp t) (nameLabel n) ++ "(" ++ show (nameAtom n) ++ ")" 
 
 -- Forall ∀
 -- Capital Lambda Λ = \0923
 -- lambda λ = \0955
 -- | Pretty-print term 
 instance PP Trm where
-   ppp (Lam x)      = x @@ \n t -> "λ" ++ pppN n ++ pppB t where
-      pppB (Lam x') = "," ++ x' @@ \n' t' -> " " ++ pppN n' ++ pppB t' 
+   ppp (Lam x)      = x @$ \n t -> "λ" ++ pppN n ++ pppB t where
+      pppB (Lam x') = "," ++ x' @$ \n' t' -> " " ++ pppN n' ++ pppB t' 
       pppB expr     = '.':ppp expr
-      pppN n        = fromMaybe "Nothing" $ do -- Maybe monad
-         (s, t) <- nameLabel n 
-         return (s ++ ":" ++ ppp t)
-   ppp (TLam x)     = x @@ \n t -> "Λ" ++ ppp n ++ pppB t where
-      pppB (TLam x') = x' @@ \n' t' -> " " ++ ppp n' ++ pppB t'
+      pppN n        = let (s, t) = nameLabel n in (s ++ ":" ++ ppp t)
+   ppp (TLam x)     = x @$ \n t -> "Λ" ++ ppp n ++ pppB t where
+      pppB (TLam x') = x' @$ \n' t' -> " " ++ ppp n' ++ pppB t'
       pppB expr     = '.':ppp expr
    ppp (Var s)      = ppp s
    ppp (App x y)    = pppL x ++ pppR y where
@@ -313,43 +337,18 @@ instance {-# OVERLAPS #-} Show (Maybe Typ) where
 
 
 
-{- instance PP Trm where
-   ppp x = ppp_ x ++ " : " ++ ppp (typeOf x) 
-   where
-      ppp_ (Lam x)          = x @@ \n s -> "λ" ++ ppp_ n ++ pppB s where
-         pppB (Lam x)        = x @@ \n s -> " " ++ ppp_ n ++ pppB s
-         pppB expr           = '.':ppp_ expr
-   --    ppp_T (TV "_")       = ""
-   --  ppp_T t              = ':':ppp_ t
-      ppp_ (TLam x)          = x @@ \n t -> "λ" ++ ppp_ n ++ pppB t where
-         pppB (TLam x)       = x @@ \n t -> " " ++ ppp_ n ++ pppB t
-         pppB expr           = '.':ppp_ expr
-      ppp_ (Var s)     = ppp_ s
-      ppp_ (App x y)   = pppL x ++ pppR y where
-         pppL (Lam _)  = "(" ++ ppp_ x ++ ")"
-         pppL _         = ppp_ x
-         pppR (Var s)   = ' ':ppp_ s
-         pppR _         = "(" ++ ppp_ y ++ ")"
-      ppp_ (TApp x y)   = pppL x ++ "[" ++ ppp_ y ++ "]" where
-         pppL (Lam _)   = "(" ++ ppp_ x ++ ")"
-         pppL _         = ppp_ x
-   --  ppp_ (Let x y z) =
-   --    "let " ++ x ++ " = " ++ ppp_ y ++ " in " ++ ppp_ z
--}
-
-
 -- * Helper functions for building terms 
 
 -- | Build type quantification from function: f ↦ ∀ a.(f a) for fresh a
-tall :: NTyp -> (Typ -> Typ) -> Typ 
+tall :: NTypLabel -> (Typ -> Typ) -> Typ 
 tall s f = All $ absFresh s (f . TVar)
 
 -- | Build type lambda from function: f ↦ Λ a.(f a) for fresh a
-tlam :: NTyp -> (Typ -> Trm) -> Trm
+tlam :: NTypLabel -> (Typ -> Trm) -> Trm
 tlam s f = TLam $ absFresh s (f . TVar)
 
 -- | Build term lambda from function: f ↦ λ a.(f a) for fresh a
-lam :: NTrm -> (Trm -> Trm) -> Trm
+lam :: NTrmLabel -> (Trm -> Trm) -> Trm
 lam (s,ty) f = Lam $ absFresh (s, ty) (f . Var)
 
 -- | Term-to-term application
@@ -404,3 +403,4 @@ transform = tall "X" $ \xx -> xx :-> xx
 selfapp :: Trm
 selfapp = lam ("x", transform) $ \x -> (x @@. transform) @. x  
 
+{- $tests Property-based tests are in "Language.Nominal.Properties.Examples.SystemFSpec". -}

@@ -1,46 +1,55 @@
+{-| 
+__Please read the source code to view the tests.__
+-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module Language.Nominal.Properties.Examples.SystemFSpec
     where
 
+import Data.Maybe
 import Test.QuickCheck
+import Type.Reflection                   (Typeable)
 
-import Language.Nominal.Names 
+import Language.Nominal.Name 
 import Language.Nominal.Nom
 import Language.Nominal.Sub
 import Language.Nominal.Examples.SystemF
-import Data.Maybe
 
 -- * Substitution
 
 -- | y[n-> var n] = y
-iprop_sub_id :: (Sub n x y, Eq y) => (Name n -> x) -> Name n -> y -> Bool 
+iprop_sub_id :: (KSub ntyp x y, Eq y) => (ntyp -> x) -> ntyp -> y -> Bool 
 iprop_sub_id f n y = y == sub n (f n) y
-prop_sub_id_typevar' :: Name NTyp -> Typ -> Bool 
+prop_sub_id_typevar' :: NTyp -> Typ -> Bool 
 prop_sub_id_typevar' = iprop_sub_id TVar 
-prop_sub_id_termvar :: Name NTrm -> Trm -> Bool 
+prop_sub_id_termvar :: NTrm -> Trm -> Bool 
 prop_sub_id_termvar = iprop_sub_id Var
-prop_sub_id_typevar :: Name NTyp -> Trm -> Bool 
+prop_sub_id_typevar :: NTyp -> Trm -> Bool 
 prop_sub_id_typevar = iprop_sub_id TVar
 
 
 -- | n # y => y[n->x] = y
-iprop_sub_fresh :: (Sub n x y, Eq y, Show y) => Name n -> x -> y -> Property 
-iprop_sub_fresh n x y = isFresh n y ==> (y === sub n x y)
-prop_sub_fresh_typevar' :: Name NTyp -> Typ -> Typ -> Property 
+iprop_sub_fresh :: (Typeable (s :: k), KSwappable k y, KSub (KName s n) x y, Eq y, Show y) => KName s n -> x -> y -> Property 
+iprop_sub_fresh n x y = n `freshFor` y ==> (y === sub n x y)
+prop_sub_fresh_typevar' :: NTyp -> Typ -> Typ -> Property 
 prop_sub_fresh_typevar' = iprop_sub_fresh 
-prop_sub_fresh_typevar :: Name NTyp -> Typ -> Trm -> Property 
+prop_sub_fresh_typevar :: NTyp -> Typ -> Trm -> Property 
 prop_sub_fresh_typevar = iprop_sub_fresh 
-prop_sub_fresh_termvar :: Name NTrm -> Trm -> Trm -> Property 
+prop_sub_fresh_termvar :: NTrm -> Trm -> Trm -> Property 
 prop_sub_fresh_termvar = iprop_sub_fresh 
 
 -- | n' # y => y[n->n'] = (n' n).y
-iprop_sub_perm :: (Sub n x y, Eq y, Show y) => (Name n -> x) -> Name n -> Name n -> y -> Property 
-iprop_sub_perm f n n' y = isFresh n' y ==> sub n (f n') y === swp n' n y
-prop_sub_perm_typevar' :: Name NTyp -> Name NTyp -> Typ -> Property 
+iprop_sub_perm :: (Typeable (s :: k), KSwappable k y, KSub (KName s n) x y, Eq y, Show y) => (KName s n -> x) -> KName s n -> KName s n -> y -> Property 
+iprop_sub_perm f n n' y = 
+   n' `freshFor` y ==> sub n (f n') y === kswpN n' n y
+prop_sub_perm_typevar' :: NTyp -> NTyp -> Typ -> Property 
 prop_sub_perm_typevar' = iprop_sub_perm TVar 
 -- this one trapped an error
-prop_sub_perm_typevar'' :: Name NTyp -> Name NTyp -> Trm -> Property 
+prop_sub_perm_typevar'' :: NTyp -> NTyp -> Trm -> Property 
 prop_sub_perm_typevar'' = iprop_sub_perm TVar 
-prop_sub_perm_termvar :: Name NTrm -> Name NTrm -> Trm -> Property 
+prop_sub_perm_termvar :: NTrm -> NTrm -> Trm -> Property 
 prop_sub_perm_termvar = iprop_sub_perm Var 
 
 
@@ -74,10 +83,10 @@ prop_id_type_unchanged t = typable t ==> typeOf t === typeOf (App (TApp idTrm (t
 prop_app_id :: Trm -> Property 
 prop_app_id t = typable t ==> nf' t === nf' (App (TApp idTrm (typeOf' t)) t)
 
-{-- prop_typable_sub :: Name NTrm -> Trm -> Trm -> Property
+{-- prop_typable_sub :: Name NTrmLabel -> Trm -> Trm -> Property
 prop_typable_sub n t1 t2 = typable t1 ==> typable t2 ==> typable $ sub n t1 t2 --}
 
-{-- prop_typable_sub' :: Name NTrm -> Trm -> Trm -> Property
+{-- prop_typable_sub' :: Name NTrmLabel -> Trm -> Trm -> Property
 prop_typable_sub' n t1 t2 = typable t1 ==> typable t2 ==> ((typeOf' t2) === (typeOf' (sub n' t1 t2))) where 
    n' = nameOverwriteLabel (Just ("",typeOf' t1)) n --}
 
@@ -99,4 +108,3 @@ prop_church_numerals1 (NonNegative i) = church (i + 1) /= church i
 prop_church_numerals_type :: NonNegative Int -> Bool
 prop_church_numerals_type (NonNegative i) = typeOf (church i) == Just nat
  
--- mjg do scope extrusion, perhaps using a nameless type

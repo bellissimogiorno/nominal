@@ -1,2 +1,13 @@
+.ghcid
 .stack-work/
 stack.yaml.lock
+*.toc
+*.aux
+*.idx
+*.pdf
+*.bbl
+*.blg
+*.out
+*.log
+*.swo
+*.swp

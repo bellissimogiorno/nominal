@@ -5,11 +5,7 @@ module Language.Nominal.Examples.SystemFSpec
 import Test.Hspec
 import Test.QuickCheck
 
-import Language.Nominal.Names 
-import Language.Nominal.Nom
-import Language.Nominal.Sub
-
-import Language.Nominal.SpecUtilities ()
+import Language.Nominal.Properties.SpecUtilities ()
 
 import Language.Nominal.Properties.Examples.SystemFSpec
 

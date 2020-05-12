@@ -22,13 +22,13 @@ Run tests by
 module Language.Nominal.Properties.AllTests
     where
 
-import Language.Nominal.Names 
+import Language.Nominal.Name 
 import Language.Nominal.Nom 
 import Language.Nominal.Sub 
 import Language.Nominal.Abs 
 import Language.Nominal.Examples.SystemF  
 import Language.Nominal.Properties.SpecUtilities  
-import Language.Nominal.Properties.NamesSpec 
+import Language.Nominal.Properties.NameSpec 
 import Language.Nominal.Properties.NomSpec 
 import Language.Nominal.Properties.AbsSpec 
 import Language.Nominal.Properties.Examples.SystemFSpec 

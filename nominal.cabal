@@ -1,15 +1,8 @@
 cabal-version: 1.12
-
--- This file has been generated from package.yaml by hpack version 0.31.2.
---
--- see: https://github.com/sol/hpack
---
--- hash: 0ae2a11fa826abfe7b7b66971416b3c670504d1e6009203f7fc63b68c3ed9d69
-
 name:           nominal
 version:        0.1.0.0
-description:    Nominal-flavoured implementation of data in a context of local names, designed following the ideas in <https://link.springer.com/article/10.1007/s001650200016 a new approach to abstract syntax with variable binding> (see also <http://www.gabbay.org.uk/papers.html#newaas-jv author's pdfs>).
-                See also a tutorial in "Language.Nominal.Examples.Tutorial", an example development of System F in "Language.Nominal.Examples.SystemF", and properties in "Language.Nominal.Properties.AllTests".
+description:    Nominal-flavoured implementation of data in a context of local names, following the ideas in <https://link.springer.com/article/10.1007/s001650200016 a new approach to abstract syntax with variable binding> (see also <http://www.gabbay.org.uk/papers.html#newaas-jv author's pdfs>).
+                __The recommended landing page is "Language.Nominal", so please go there first.__ See also: a tutorial in "Language.Nominal.Examples.Tutorial"; an example development of System F in "Language.Nominal.Examples.SystemF"; and an example development of an EUTxO-style blockchain in "Language.Nominal.Examples.IdealisedEUTxO".
 homepage:       https://github.com/bellissimogiorno/nominal#readme
 bug-reports:    https://github.com/bellissimogiorno/nominal/issues
 author:         Murdoch J. Gabbay
@@ -26,17 +19,26 @@ source-repository head
 library
   exposed-modules:
       Language.Nominal.Utilities
-      Language.Nominal.Names
+      Language.Nominal.Name
       Language.Nominal.Nom
       Language.Nominal.Abs
       Language.Nominal.Sub
+      Language.Nominal.NameSet
+      Language.Nominal.Unify
+      Language.Nominal.Equivar
       Language.Nominal.Examples.SystemF
+      Language.Nominal.Examples.IdealisedEUTxO
       Language.Nominal.Examples.Tutorial
       Language.Nominal
       Language.Nominal.Properties.SpecUtilities
-      Language.Nominal.Properties.NamesSpec
+      Language.Nominal.Properties.NameSpec
+      Language.Nominal.Properties.NameSetSpec
       Language.Nominal.Properties.NomSpec
       Language.Nominal.Properties.AbsSpec
+      Language.Nominal.Properties.SubSpec
+      Language.Nominal.Properties.UnifySpec
+      Language.Nominal.Properties.EquivarSpec
+      Language.Nominal.Properties.Examples.IdealisedEUTxOSpec
       Language.Nominal.Properties.Examples.SystemFSpec
       Language.Nominal.Properties.AllTests
   hs-source-dirs:
@@ -44,44 +46,48 @@ library
   build-depends:
       QuickCheck
     , Unique
+    , algebra
     , base >=4.7 && <5
     , containers
     , extra
+    , finite-typelits >= 0.1.4.2
+    , data-default
+    , flow
   default-language: Haskell2010
-  ghc-options: -Wall
-
--- executable nominal-exe
---   main-is: Main.hs
---   other-modules:
---       Paths_nominal
---   hs-source-dirs:
---       app
---   ghc-options: -threaded -rtsopts -with-rtsopts=-N
---   build-depends:
---       QuickCheck
---     , Unique
---     , base >=4.7 && <5
---     , containers
---     , extra
---     , nominal
---   default-language: Haskell2010
+  ghc-options: -Wall -Werror
 
 test-suite nominal-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Language.Nominal.NamesSpec
+      Language.Nominal.NameSpec
+    , Language.Nominal.NameSetSpec
     , Language.Nominal.NomSpec
     , Language.Nominal.AbsSpec
-    , Language.Nominal.SpecUtilities
+    , Language.Nominal.SubSpec
+    , Language.Nominal.UnifySpec
+    , Language.Nominal.EquivarSpec
     , Language.Nominal.Examples.SystemFSpec
   hs-source-dirs:
       test
-  ghc-options: -Wall
+  ghc-options: -Wall -Werror
   build-depends:
       base >=4.7 && <5
     , hspec
     , hspec-discover
     , nominal
+    , QuickCheck
+    , data-default
+  default-language: Haskell2010
+
+test-suite nominal-doctest
+  type: exitcode-stdio-1.0
+  main-is: DocTest.hs
+  hs-source-dirs:
+      doctest
+  ghc-options: -Wall -Werror
+  build-depends:
+      base >=4.7 && <5
+    , doctest
     , QuickCheck
   default-language: Haskell2010

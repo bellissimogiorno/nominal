@@ -13,8 +13,9 @@ The package design is based on a well-studied mathematical reference model as de
 
 For usage, please see: 
 
-* [The tutorial](https://github.com/bellissimogiorno/nominal/blob/master/src/Language/Nominal/Examples/Tutorial.hs).  This covers the main points of the package, from the point of view of a working programmer wishing to see the functions in use.  It is best read directly from source code. 
+* [The tutorial](https://github.com/bellissimogiorno/nominal/blob/master/src/Language/Nominal/Examples/Tutorial.hs).  This covers the main points of the package, from the point of view of a working programmer wishing to see the functions in use.  
 * [An implementation of System F](https://github.com/bellissimogiorno/nominal/blob/master/src/Language/Nominal/Examples/SystemF.hs) is an illustrative example of those functions applied in something resembling typical practice.
+* [An implementation of a EUTxO blockchain system](https://github.com/bellissimogiorno/nominal/blob/master/src/Language/Nominal/Examples/IdealisedEUTxO.hs) is another, quite different, example of those functions applied in something resembling typical practice.
 * More examples are in preparation. 
 
 
@@ -22,4 +23,4 @@ For usage, please see:
 
 ## Acknowledgements
 
-Thanks to Lars Brünjes for help and support. 
+Thanks to Lars Brünjes for help, support, and code contributions. 

@@ -1,67 +1,65 @@
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE PolyKinds           #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Nominal.Properties.SpecUtilities
     where
 
-import System.IO.Unsafe (unsafePerformIO)
-import Data.Unique      (newUnique)
+import           System.IO.Unsafe   (unsafePerformIO)
+import qualified Data.List.NonEmpty as NE
+import           Data.Proxy         (Proxy (..))
+import           Data.Unique        (Unique, newUnique)
+import           Type.Reflection    (Typeable)
 
-import Test.QuickCheck
+import           Test.QuickCheck
 
-import Language.Nominal.Names
-import Language.Nominal.Nom
-import Language.Nominal.Abs
-import Language.Nominal.Examples.SystemF
-
-singleton :: a -> [a]
-singleton a = [a]
+import           Language.Nominal.Abs
+import           Language.Nominal.Examples.SystemF
+import           Language.Nominal.Name
+import           Language.Nominal.Nom
+import           Language.Nominal.Unify
+import           Language.Nominal.Equivar
 
 myatomnames :: [String]
-myatomnames = map show [0 :: Int .. 9]
+myatomnames = map show [0 :: Int .. 25]
 
-myatoms :: [Atom]
-{-# NOINLINE myatoms #-}  -- play safe because of unsafePerformIO
-myatoms = unsafePerformIO $ mapM (\_x -> Atom <$> newUnique) myatomnames 
+{-# NOINLINE myUniques #-}  -- play safe because of unsafePerformIO
+myUniques :: [Unique]
+myUniques = unsafePerformIO $ mapM (\_x -> newUnique) myatomnames 
+
+myAtoms :: proxy s -> [KAtom s]
+myAtoms _ = Atom <$> myUniques
 
 -- | We only care about short and simple strings
 instance {-# OVERLAPPING #-} Arbitrary String where
---   arbitrary = getPrintableString <$> arbitrary 
-   arbitrary = elements $ map singleton (['a'..'z']++['A'..'Z'])
+    arbitrary = elements $ map return (['a'..'z']++['A'..'Z'])
 
 -- | Pick an atom
-instance Arbitrary Atom where
-   arbitrary = elements myatoms 
+instance Arbitrary (KAtom s) where
+    arbitrary = elements $ myAtoms (Proxy :: Proxy s)
 
-instance Arbitrary a => Arbitrary (Name a) where
-   arbitrary = do -- Gen monad
-      atm <- arbitrary  
-      a <-   arbitrary  
-      return $ Name (Just a, atm) 
+instance Arbitrary a => Arbitrary (KName s a) where
+   arbitrary = Name <$> arbitrary <*> arbitrary
 instance {-# OVERLAPPING #-} Arbitrary (Name String) where
    arbitrary = do -- Gen monad
       atm <- arbitrary  
-      return $ Name (Just (show atm), atm) 
-{-- instance Arbitrary (Name ()) where
-   arbitrary = do -- Gen monad
-      a <- arbitrary 
-      return $ Name (Just (), a) 
---}
+      return $ Name (show atm) atm
 
-instance (Swappable t a, Arbitrary (Name t), Arbitrary a) => Arbitrary (Abs t a) where
+instance (Typeable s, KSwappable k a, Arbitrary (KName (s :: k) t), Arbitrary a) => Arbitrary (KAbs (KName s t) a) where
    arbitrary = do -- Gen monad
       nam <- arbitrary
       a   <- arbitrary
-      return $ absByName nam a  -- hlint suggestion ignored
+      return $ abst nam a  -- hlint suggestion ignored
 
-instance (Swappable t a, Arbitrary (Name t), Arbitrary a) => Arbitrary (Nom t a) where
+instance (Swappable a, Arbitrary a) => Arbitrary (Nom a) where
    arbitrary = do -- Gen monad
       nams <- arbitrary
       a    <- arbitrary
       return $ res nams a   -- hlint suggestion ignored
-
 
 -- | For QuickCheck tests: pick a type
 instance Arbitrary Typ where
@@ -81,7 +79,7 @@ arbitrarySizedTyp m =
            ,do -- Gen monad
                t <- arbitrarySizedTyp (m-1)
                n <- arbitrary
-               return $ All (absByName n t)
+               return $ All (abst n t)
            ]
 
 -- | For QuickCheck tests: pick a term 
@@ -102,7 +100,7 @@ arbitrarySizedTrm m =
            ,do -- Gen monad
                t <- arbitrarySizedTrm (m-1)
                n <- arbitrary
-               return $ Lam (absByName n t)
+               return $ Lam (abst n t)
            ,do -- Gen monad
                t1 <- arbitrarySizedTrm (m `div` 2) 
                t2 <- arbitrarySizedTyp (m `div` 2)
@@ -110,6 +108,21 @@ arbitrarySizedTrm m =
            ,do -- Gen monad
                t <- arbitrarySizedTrm (m-1)
                n <- arbitrary
-               return $ TLam (absByName n t)
+               return $ TLam (abst n t)
            ]
 
+instance Arbitrary a => Arbitrary (NE.NonEmpty a) where
+    arbitrary = (NE.:|) <$> arbitrary <*> arbitrary
+
+genEvFinMap :: (UnifyPerm a, Eq a, Eq b) => Gen a -> Gen b -> Gen (EvFinMap a b)
+genEvFinMap genA genB = evFinMap <$> genB <*> listOf ((,) <$> genA <*> genB)
+
+instance forall a b. 
+         ( Arbitrary a
+         , UnifyPerm a
+         , Eq a
+         , Arbitrary b
+         , Eq b
+         ) => Arbitrary (EvFinMap a b) where
+    arbitrary = genEvFinMap arbitrary arbitrary
+    shrink f = [evFinMap b xs | (b, xs) <- shrink $ fromEvFinMap f]
