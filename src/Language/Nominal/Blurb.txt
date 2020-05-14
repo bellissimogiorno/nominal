@@ -1,12 +1,12 @@
 
 {- $blurb 
 
-The interaction of name-binding with data can be tricky.  Examples include:
+The interaction of name-binding and alpha-equivalence with data can be tricky.  Examples include:
 
 * Inductively defining syntax and reductions of a syntax with binding, e.g. lambda-calculus.  An example is in "Language.Nominal.Examples.SystemF".
 * Graph-like structures, especially if they have dangling pointers.  An example is in "Language.Nominal.Examples.IdealisedEUTxO".
 
-This package implements a solution in Haskell, based on names and swappings.  With it, you can define data with name-binding and program on this data in a manner closely mirroring informal practice.
+This package implements a solution in Haskell, based on names and swappings.  
 
 Features include:
 

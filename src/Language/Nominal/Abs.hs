@@ -54,6 +54,7 @@ import           Data.Default
 import           Type.Reflection (Typeable)
 import           GHC.Generics
 
+import Language.Nominal.Utilities ((.:))
 import Language.Nominal.Name 
 import Language.Nominal.NameSet 
 import Language.Nominal.Nom
@@ -90,7 +91,8 @@ abst nam a = KAbsWrapper nam $ \nam' -> kswpN nam' nam a
 
 -- | A 'Name' is just a pair of a label and an 'Atom'.  This version of 'abst' that takes a label and an atom, instead of a name.
 abst' :: (Typeable (s :: k), KSwappable k a) => t -> KAtom s -> a -> KAbs (KName s t) a
-abst' t atm = abst (Name t atm) 
+abst' = abst .: Name 
+-- abst' t atm = abst (Name t atm) 
 
 -- | Fuse abstractions, taking label of abstracted name from first argument.
 -- Should satisfy:
@@ -131,20 +133,15 @@ infixr 9 @#
 -- | Concretion.  To destroy an abstraction x', provide it with an f and calculate x' @$ f.
 -- This unpacks x' as (n,x) for a fresh name n, and calculates f n x.
 (@$) :: KAbs (KName s t) a -> (KName s t -> a -> b) -> b
-(@$) x f = unsafeUnNom $ x @# f
+(@$) x' f = unsafeUnNom $ x' @# f
 
 infixr 9 @$
-
--- @$
--- @$$
--- >>@
--- @#
--- @$
 
 
 -- | Map out of an 'Abs' to a type @b@ with its own notion of atoms-restriction
 absToRestrict :: KRestrict s b => KAbs (KName s t) a -> (KName s t -> a -> b) -> b
-absToRestrict x' f = unNom $ x' @# f 
+absToRestrict = unNom .: (@#)  
+-- absToRestrict x' f = unNom $ x' @# f 
 
 -- | Support of a.x is the support of x minus a
 instance (Typeable s, KSupport s a, KSupport s t) => KSupport s (KAbs (KName s t) a) where
@@ -155,7 +152,6 @@ instance (Typeable s, KSupport s a, KSupport s t) => KSupport s (KAbs (KName s t
 -- | Return the label of an abstraction
 absLabel :: KAbs (KName s t) a -> t
 absLabel = nameLabel . absName
--- absLabel a = a @$ \n _ -> nameLabel n
 
 
 -- * The bijection between @'Abs'@ and @'Nom'@
@@ -209,7 +205,9 @@ absFuncOut f = KAbsWrapper (justALabel def) $ \nam a -> conc (f (abst nam a)) na
 
 -- | Nameless form of substitution, where the name for which we substitute is packaged in a @'KAbs'@ abstraction. 
 subM :: KSub (KName s n) x y => KAbs (KName s n) y -> x -> y
-subM y' x = y' @$ \n y -> sub n x y
+subM y' x = y' @$ flip sub x 
+-- subM y' x = y' @$ \n -> sub n x
+-- subM y' x = y' @$ \n y -> sub n x y
 
 -- | sub on a nominal abstraction substitutes in the label, and substitutes capture-avoidingly in the body
 instance (Typeable (s :: k), Typeable (u :: k), KSub (KName s n) x t, KSub (KName s n) x y, KSwappable k t, KSwappable k y) => 

@@ -150,7 +150,6 @@ instance Typeable s => KSupport s (KRen s) where
    ksupp _ (Ren m') = 
       fromMaybe S.empty $ 
          DM.foldrWithKey (\a b s -> if a == b then s else s `S.union` (S.fromList [a,b])) S.empty <$> m' 
--- mjg@lbr do we have an arbitrary instance for Ren?
 
 
 -- | The parts of the map that are not identity

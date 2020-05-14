@@ -11,7 +11,7 @@ Helper functions
 -}
 
 {-# LANGUAGE FlexibleInstances     
-           , UndecidableInstances    -- needed for Num a => Nameless a
+--           , UndecidableInstances    
            , InstanceSigs          
            , MultiParamTypeClasses 
            , FlexibleContexts      
@@ -40,10 +40,17 @@ class Cong a where
    cong :: (a -> Maybe a) -> a -> a
    cong = mkCong congRecurse
 
-
 -- | Apply f repeatedly until we reach a fixedpoint
 repeatedly :: Eq a => (a -> a) -> a -> a
 repeatedly f x = if f x == x then x else repeatedly f (f x)
+
+-- | Applies function provided condition holds
+--
+-- > (f `providedThat` (const True)) a  = f a
+-- > (f `providedThat` (const False)) a = Nothing
+providedThat :: (a -> Maybe b) -> (a -> Bool) -> a -> Maybe b 
+providedThat f tst a = if tst a then f a else Nothing
+
 
 
 -- | Apply a list of functions in succession.
@@ -55,10 +62,6 @@ chain = foldr (.) id
 toMaybe :: Bool -> a -> Maybe a
 toMaybe True  a = Just a
 toMaybe False _ = Nothing
-
--- | Applies function provided condition holds
-providedThat :: (a -> Maybe b) -> (a -> Bool) -> a -> Maybe b 
-providedThat f tst a = if tst a then f a else Nothing
 
  
 -- | List subset.  Surely this must be in a library somewhere.
@@ -83,6 +86,14 @@ safeHead :: [a] -> Maybe a
 safeHead (h : _) = Just h 
 safeHead _       = Nothing
 
+-- https://hackage.haskell.org/package/intro-0.7.0.0/docs/Intro.html#v:.:
+-- | Compose functions with one argument with function with two arguments.
+--
+--   @f .: g = \\x y -> f (g x y)@.
+(.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
+(.:) = (.) . (.)
+infixr 8 .:
+{-# INLINE (.:) #-}
 
 -- | Finds the unique element in a collection satisfying a predicate. 
 -- Results in an error if there is no such element or if there are more than one.

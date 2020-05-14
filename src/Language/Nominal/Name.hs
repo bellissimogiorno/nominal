@@ -149,7 +149,7 @@ freshAtomIO = head <$> freshAtomsIO [()]
 --
 -- * @a@ to @b@ and 
 -- * @b@ to @a@ and 
--- leaves all other names unchanged.  
+-- * any other @c@ to @c@.
 --
 -- Swappings are invertible, which allows them to commute through type-formers containing negative arities, e.g. the left-hand argument of function arrow.  Swappings always distribute:
 --
@@ -313,6 +313,9 @@ deriving via Nameless Int  instance KSwappable k Int
 deriving via Nameless ()   instance KSwappable k ()
 deriving via Nameless Char instance KSwappable k Char
 
+-- | A smallish nameless type
+-- data Smallish = SmallA | SmallB | SmallC | SmallD | SmallE
+-- deriving via Nameless Smallish instance KSwappable k Smallish 
 
 -- * Generics support for @'KSwappable'@
 

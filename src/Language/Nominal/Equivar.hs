@@ -224,8 +224,11 @@ Values of @'KEvFinMap'@ must be constructed using
 data KEvFinMap (s :: k) a b = DefAndRep (Nameless b) [(a, Nameless b)]  
     deriving (Show, Generic, KSwappable k)
 
+-- | We insist @a@ and @b@ be @k@-swappable so that the mathematical notion of support (which is based on nominal sets) makes sense.  
+--
+-- Operationally, we don't care: if see something of type @KEvFinMap s a b@, we return @Set.empty@.
 instance (Typeable (s :: k), KSwappable k a, KSwappable k b) => KSupport s (KEvFinMap s a b) where 
-   ksupp _ _ = Set.empty  -- We insist @a@ and @b@ be @k@-swappable so that the mathematical notion of support (which is based on nominal sets) makes sense.  Operationally, we don't actually care: if see something of type @KEvFinMap s a b@, we return @Set.empty@.
+   ksupp _ _ = Set.empty  
 
 -- | @'KEvFinMap'@ at a @'Tom'@.  Thus, a type for orbit-finite @'Tom'@-equivariant maps.
 type EvFinMap a b = KEvFinMap 'Tom a b
@@ -270,11 +273,15 @@ constEvFinMap b = DefAndRep (Nameless b) []
 extEvFinMap :: forall s a b. (KUnifyPerm s a, Eq a, Eq b) => a -> b -> KEvFinMap s a b -> KEvFinMap s a b
 extEvFinMap a b f@(DefAndRep (Nameless b') xs) = case kevLookupList' (Proxy :: Proxy s) xs a of
     Nothing
-        | b == b'   -> f
-        | otherwise -> DefAndRep (Nameless b') $ (a, Nameless b) : xs
-    Just (a', Nameless b'')
+-- No mapping but sending a to the default value?  Then noop. 
+        | b == b'   -> f  
+-- No mapping and not sending a to the default value?  Add (a,b)
+        | otherwise -> DefAndRep (Nameless b') $ (a, Nameless b) : xs  
+    Just (a'', Nameless b'')
+-- (a,b) is already there, up to permuting atoms in a (b is nameless).  Noop.
         | b == b''  -> f
-        | otherwise -> DefAndRep (Nameless b') [(c, if c == a' then Nameless b else d) | (c, d) <- xs]
+-- (a,b) is not already there up to permuting atoms in a.  Remove (a'',b'') and replace with (a'',b).  We really rely on b being nameless, here.
+        | otherwise -> DefAndRep (Nameless b') [(c, if c == a'' then Nameless b else d) | (c, d) <- xs]
 
 -- | Constructs an orbit-finite equivariant map by prescribing a default value, and
 -- finitely many argument-value pairs.

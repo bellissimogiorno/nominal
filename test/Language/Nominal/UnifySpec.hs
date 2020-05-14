@@ -15,6 +15,7 @@ spec = do
     it "res ns' (res ns x)  unifiable with  res ns (res ns' x)" $ property prop_res_res
     it "x' -> ns x -> res ns x  unifies with x'" $ property prop_res_unres
     it "Unifiers correctly calculated" $ property prop_unify_ren
+    it "idRen == idRen [a -> a] (equality is on nub)" $ property prop_renId
     it "Permutations and freshening renamings coincide (lists of lists of atoms)" $ property prop_fresh_ren_atmlistlist
     it "Permutations and freshening renamings coincide (abstractions of lists of atoms)" $ property prop_fresh_ren_absatmlist
 

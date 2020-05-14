@@ -41,6 +41,10 @@ prop_unify_ren a b = let a' = Prelude.take 5 a -- control size so decent chance 
                          b' = Prelude.take 5 b
                      in unifiablePerm a' b' ==> ren (unifyPerm a' b') a' === b'
 
+-- | 'idRen' equals 'idRen' extended with an identity mapping (since equality is on nub).
+prop_renId :: Atom -> Bool
+prop_renId a = renExtend a a idRen == idRen 
+
 
 -- | Permutations and freshening renamings coincide
 iprop_fresh_ren :: (UnifyPerm a, Support a, Swappable a, Eq a) => a -> Bool
@@ -55,3 +59,4 @@ prop_fresh_ren_atmlistlist = iprop_fresh_ren
 prop_fresh_ren_absatmlist :: Abs () [Atom] -> Bool
 prop_fresh_ren_absatmlist = iprop_fresh_ren 
 
+-- TODO: arbitrary instance for Ren?

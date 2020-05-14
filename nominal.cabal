@@ -68,6 +68,7 @@ test-suite nominal-test
     , Language.Nominal.UnifySpec
     , Language.Nominal.EquivarSpec
     , Language.Nominal.Examples.SystemFSpec
+    , Language.Nominal.Examples.IdealisedEUTxOSpec
   hs-source-dirs:
       test
   ghc-options: -Wall -Werror

@@ -79,14 +79,14 @@ type Support a = KSupport 'Tom a
 supp :: Support a => a -> Set Atom
 supp = ksupp atTom
 
--- order: nameless, tuple, list, nonempty list, maybe, sum, atom, name, nom, abs 
 instance Typeable s => KSupport s (Nameless a) where
     ksupp _ _ = S.empty 
-deriving via Nameless () instance Typeable s => KSupport s ()
+deriving via Nameless ()   instance Typeable s => KSupport s ()
 deriving via Nameless Bool instance Typeable s => KSupport s Bool
 deriving via Nameless Char instance Typeable s => KSupport s Char
-deriving via Nameless Int instance Typeable s => KSupport s Int
+deriving via Nameless Int  instance Typeable s => KSupport s Int
 
+-- order: nameless, tuple, list, nonempty list, maybe, sum, atom, name, nom, abs 
 instance (Typeable (s :: k), Typeable (t :: k)) => KSupport s (KAtom t) where  -- We need s and t to both have kind k so that testEquality will work.  testEquality can only compare two types of the same kind. 
     ksupp _ a = case testEquality (typeRep :: TypeRep s) (typeRep :: TypeRep t) of
         Nothing   -> S.empty
@@ -117,6 +117,7 @@ kapart p a b = S.disjoint (ksupp p a) (ksupp p b)
 apart :: (Support a, Support b) => a -> b -> Bool
 apart = kapart atTom
 
+
 -- * Identifying list elements by name or atom 
 
 -- | Bring the first element of a list-like structure that an atom points to (by being mentioned in the support), and put it at the head of the nonempty list.  Raises error if no such element exists. 
@@ -127,10 +128,11 @@ atomPoint a = point $ S.member a . ksupp Proxy
 namePoint :: (Foldable f, KSupport s a) => KName s t -> f a -> NonEmpty a
 namePoint = atomPoint . nameAtom
 
+
 -- * Restriction
 
 -- | Class for types that support a /remove these atoms from my support, please/ operation. 
--- Should satisfy: 
+-- Should satisfy e.g.: 
 --  
 -- > restrict atms $ restrict atms x == restrict atms x
 --
@@ -139,11 +141,13 @@ namePoint = atomPoint . nameAtom
 -- The canonical instance of @'KRestrict'@ is @'Language.Nominal.Nom.Nom'@.
 -- The @'KSwappable'@ constraint is not necessary for the code to run, but in practice wherever we use @'KRestrict'@ we expect the type to have a swapping action.
 --
--- Note for experts: We may want @'KRestrict'@ without @'KSupport'@, for example to work with @Nom (Atom -> Atom)@. 
+-- /Note for experts:/ We may want @'KRestrict'@ without @'KSupport'@, for example to work with @Nom (Atom -> Atom)@. 
+--
+-- /Note for experts:/ Restriction is familiar in general terms (e.g. pi-calculus restriction).  In a nominal context, the original paper is <https://dl.acm.org/doi/10.1145/1069774.1069779 nominal rewriting with name-generation> (<http://gabbay.org.uk/papers.html#nomrng author's pdf>), and this has a for-us highly pertinent emphasis on unification and rewriting. 
 class (Typeable s, KSwappable k a) => KRestrict (s :: k) a where
--- class KRestrict s a where
    restrict  :: [KAtom s] -> a -> a   
 
+-- | Instance of 'KRestrict' on a ''Tom''.
 type Restrict = KRestrict 'Tom
 
 -- | Form of restriction that takes names instead of atoms.  Just discards name labels and calls @'restrict'@.

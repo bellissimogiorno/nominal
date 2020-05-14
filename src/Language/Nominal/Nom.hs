@@ -26,9 +26,9 @@ Nominal-flavoured implementation of data in a context of local names
 
 module Language.Nominal.Nom
    ( -- * The Nom monad (low-level functions)
-     KNom, Nom,
+     KNom, Nom, nomToIO,
      -- * Destroying a @'Nom'@
-     (>>$), unsafeUnNom, nomToIO,
+     (>>$), unsafeUnNom, unsafeUnNom', 
      -- * Creating fresh ids in a @'Nom'@
      freshKAtom, freshAtom, freshKAtoms, freshKName, freshName, freshKNames, freshNames, atFresh, 
       -- * Creating a @'Nom'@
@@ -80,11 +80,13 @@ type Nom a = KNom 'Tom a
 -- The use of unsafePerformIO triggers execution of the IO action.
 -- The IO action just generates fresh unique identifiers for the bound atoms.
 -- 
--- The @$@ indicates that fresh atoms can escape scope.  Contrast with @'>>#'@.
+-- The @$@ indicates that fresh atoms can escape scope.  Contrast with @'>>#'@, where fresh atoms remain bound.
 (>>$) :: KNom s a -> ([KAtom s] -> a -> b) -> b
-(>>$) (Nom x) f = unsafePerformIO $ do -- IO monad
-   (atms, a) <- x     -- Generate fresh ids for the bound atoms
-   return $ f atms a  -- Feed this into f and return the result.
+(>>$) x' f = unsafePerformIO $ (uncurry f) <$> nomToIO x' -- apply f inside the IO monad, then strip the IO.
+{- (>>$) x' f = unsafePerformIO $ do -- IO monad
+   (atms, a) <- nomToIO x' -- Generate fresh ids for the bound atoms
+   return $ f atms a       -- Feed this into f and return the result.
+-}
 
 infixr 9 >>$
 
@@ -93,6 +95,11 @@ infixr 9 >>$
 -- Only use this if you know what you're doing; if in doubt use @'unNom'@ instead.
 unsafeUnNom :: KNom s a -> a
 unsafeUnNom x' = x' >>$ \_ x -> x
+
+-- | Generate fresh atoms in the binding and release the pair of fresh atoms and body for those atoms.
+-- Only use this if you know what you're doing. 
+unsafeUnNom' :: KNom s a -> ([KAtom s], a)
+unsafeUnNom' x' = x' >>$ (,)
 
 
 -- | @pure a = res [] a@
@@ -165,7 +172,8 @@ freshNames = freshKNames
 
 -- | atFresh f returns the value of f at a fresh name with label @t@
 atFresh :: t -> (KName s t -> a) -> KNom s a
-atFresh t f = f <$> freshKName t
+atFresh t f = freshKName t <&> f
+-- atFresh t f = f <$> freshKName t
 
 
 -- * Creating a @'Nom'@
@@ -194,7 +202,7 @@ resN ns = res (nameAtom <$> ns)
 instance (Typeable (s :: k), KSwappable k a) => KRestrict s (KNom s a) where
    restrict atms x = x >>= res atms 
 
--- | Map out of a 'Nom' to a type @b@ which has its own notion of restriction.  The @#@ indicates that no atoms can escape scope.  Contrast with @'>>$'@.
+-- | Map out of a 'Nom' to a type @b@ which has its own notion of restriction.  The @#@ indicates that no atoms can escape scope.  Contrast with @'>>$'@, where fresh atoms could be released.
 (>>#) :: KRestrict s b => KNom s a -> ([KAtom s] -> a -> b) -> b
 (>>#) x' f = x' >>$ \ns a -> restrict ns (f ns a) 
 
@@ -256,7 +264,6 @@ instance (Typeable s, Eq a) => Eq (KNom s a) where
 -- This is a canonical use of 'unNom', since 'Bool' is nameless.
 new :: KRestrict s b => t -> (KName s t -> b) -> b 
 new t = unNom . atFresh t
--- new t f = unNom $ atFresh t f
 
 -- | Evaluate predicate on fresh name with default label (if this exists) 
 new' :: (Default t, KRestrict s b) => (KName s t -> b) -> b 

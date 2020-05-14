@@ -11,6 +11,7 @@ __Please read the source code to view the tests.__
 {-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE UndecidableInstances   #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
@@ -18,7 +19,7 @@ __Please read the source code to view the tests.__
 module Language.Nominal.Properties.Examples.IdealisedEUTxOSpec
     where
 
-import Control.Monad                              (forM, replicateM)
+import Control.Monad                              (replicateM)
 import Data.List.NonEmpty                         (NonEmpty (..))
 import Data.Maybe                                 (fromJust, isJust)
 import Data.Proxy                                 (Proxy (..))
@@ -29,7 +30,7 @@ import Test.QuickCheck
 import Type.Reflection                           
 
 import Language.Nominal.Examples.IdealisedEUTxO
-import Language.Nominal.Name
+-- import Language.Nominal.Name                      (Smallish (..))
 import Language.Nominal.NameSet
 import Language.Nominal.Properties.SpecUtilities  (genEvFinMap)
 import Language.Nominal.Properties.UnifySpec      ()
@@ -117,6 +118,13 @@ instance ( Arbitrary r
 
     shrink = const [] -- TODO: We need something better here
 
+newtype SmallChunk r d v = SmallChunk (Chunk r d v)
+    deriving Show
+
+instance Arbitrary (Chunk r d v) => Arbitrary (SmallChunk r d v) where
+    arbitrary = SmallChunk <$> scale (min 7) arbitrary
+    shrink (SmallChunk ch) = SmallChunk <$> shrink ch
+
 class Validator r d v => Fixable r d v | v -> r d where
     -- | Takes a context and an output and modifies the output such that it can be consumed by the context.
     fixOutput :: Context r d v -> Output d v -> Output d v
@@ -128,10 +136,10 @@ instance (Support r, Support d) => Fixable r d (Val r d) where
 
 instance (Eq r, UnifyPerm r, Eq d, UnifyPerm d) => Fixable r d (ValFin r d) where
     fixOutput c@(Transaction (Input p _ :| _) _) (Output _ d (ValFin f)) =
-        Output p d (ValFin $ extEvFinMap (d, c) True f)
+        Output p d (ValFin $ extEvFinMap (d, c) True f) 
 
 instance (Support r, Support d) => Fixable r d (ValTriv r d) where
-    fixOutput _ = id
+    fixOutput (Transaction (Input p _ :| _) _) (Output _ d v) = Output p d v
 
 instance ( Arbitrary r
          , Support r 
@@ -140,26 +148,48 @@ instance ( Arbitrary r
          , Arbitrary v
          , Fixable r d v
          ) => Arbitrary (Blockchain r d v) where
-    arbitrary = do
-        chunk <- arbitrary
+    arbitrary = do -- Gen monad
+        (chunk :: Chunk r d v) <- arbitrary 
         if isBlockchain chunk
             then return $ blockchain chunk
-            else do
-                let cs = unsafeUnNom $ utxcsOfChunk chunk 
-                os <- forM cs $ \c -> fixOutput c <$> arbitrary
-                let tx = Transaction [] os
-                return $ blockchain $ fromJust $ padd chunk $ unsafeSingletonChunk tx
+            else do -- Gen monad 
+                -- get the utxcs of the chunk, still in a Nom binding
+                let utxcsCh' = utxcsOfChunk chunk
+                -- generate an arbitrary output for each utxc /first/ 
+                os' <- replicateM (nomPred length utxcsCh') (arbitrary :: Gen (Output d v)) 
+                -- and only /then/ unpack the list of utxcs.  Fresh atoms generated are for input-output bindings and should not interfere with atoms in os' 
+                let cs = unsafeUnNom $ utxcsCh' 
+                -- fix each output so it matches the relevant utxc.
+                let os = map (uncurry fixOutput) (zip cs os')  
+                -- make genesis block
+                let genesis = unsafeSingletonChunk (Transaction [] os)
+                -- add it to the chunk and parcel it up as a blockchain
+                -- genesis block is on the right because lists grow from right-to-left in Haskell 
+                return . blockchain . fromJust $ chunk `padd` genesis 
 
     shrink = const [] -- TODO: We need something better here
 
 
 -- Tests
 
+-- TODO: two ways to combine different validator types in one property, one lightweight, one more heavy-handed:
+-- Given prop_chunkrefl below, you can either manually (or in the actual test suite) do
+--
+-- quickCheck $ prop_chunkrefl atVal
+-- quickCheck $ prop_chunkrefl atValFin
+--
+-- If you want to automate this, you can use the ValProxy-machinery above, so by doing
+--
+-- quickCheck $ withVal (property . prop_chunkrefl)
+--
+-- a random validator type will be picked for each test. We could extend this to include more different validator types
+-- and also to include types for redeemers and/or datum if we want.
 
 -- Types 1
 type TR = () 
 type TD = () 
 type TV = ValTriv TR TD 
+--
 
 {-- Types 2 
 type TR = Int  
@@ -168,8 +198,8 @@ type TV = ValFin TR TD
 --}
 
 type TC = Chunk TR TD TV
+type SmallTC = SmallChunk TR TD TV
 type TB = Blockchain TR TD TV
--- type TX = Transaction TR TD TV
 type TX = ValidTx TR TD TV
 
 type TC' v = Chunk TR TD v
@@ -199,40 +229,33 @@ valFin = ValProxy atValFin
 withVal :: (forall v proxy. CVal v => proxy v -> a) -> ValProxy -> a
 withVal f (ValProxy p) = f p
 
--- Sanity check: every arbitrary chunk is valid.
+-- | Sanity check: every arbitrary chunk is valid.
 prop_arbitraryChunkIsValid :: TC -> Bool
 prop_arbitraryChunkIsValid = isChunk
 
--- Sanity check: not every chunk is a blockchain (might have UTxIs)! 
-prop_notEveryChunkBlockchain :: TC -> Bool
-prop_notEveryChunkBlockchain c = isBlockchain c
+-- | Sanity check: not every chunk is a blockchain (might have UTxIs)! 
+prop_notEveryChunkBlockchain :: TC -> Property 
+prop_notEveryChunkBlockchain c = expectFailure $ isBlockchain c
 
--- TODO: to restore
--- prop_blockchainToChunkAndBack :: TB -> Bool
--- prop_blockchainToChunkAndBack b = (blockchain . getBlockchain $ b) `unifiablePerm` b
+-- | Sanity check: arbitrary instance of TB generates a blockchain, which is equal to itself.
+--
+-- /'unifiablePerm' must be used here, because of the local scope./ 
+prop_blockchainToChunkAndBack :: TB -> Bool
+prop_blockchainToChunkAndBack b = (blockchain . getBlockchain $ b) `unifiablePerm` b
 
+-- | Blockchain has no UTxIs
 prop_blockchainHasNoUTxIs :: TB -> Bool 
 prop_blockchainHasNoUTxIs b = null . utxisOfChunk . getBlockchain $ b
 
--- TODO: two ways to combine different validator types in one property, one lightweight, one more heavy-handed:
--- Given prop_chunkrefl below, you can either manually (or in the actual test suite) do
---
--- quickCheck $ prop_chunkrefl atVal
--- quickCheck $ prop_chunkrefl atValFin
---
--- If you want to automate this, you can use the ValProxy-machinery above, so by doing
---
--- quickCheck $ withVal (property . prop_chunkrefl)
---
--- a random validator type will be picked for each test. We could extend this to include more different validator types
--- and also to include types for redeemers and/or datum if we want.
-
+-- | Chunk is equal to itself
 prop_chunkrefl :: CVal v => proxy v -> TC' v -> Bool 
 prop_chunkrefl _ ch = ch == ch  -- chunk equality goes through @'chunkEq'@
 
+-- | There are two different chunks
 prop_chunkneq :: TC -> TC -> Property 
 prop_chunkneq ch ch' = expectFailure $ ch == ch'
 
+-- | Empty chunk is prefix of any chunk
 prop_emptyIsPrefix :: TC -> Bool
 prop_emptyIsPrefix ch = isPrefixChunk (return pzero) ch 
 
@@ -268,13 +291,6 @@ prop_chunkHdTl_recombine ch = chunkLength ch > 0 ==> unNom $ do -- Nom monad
    (tx,ch') <- fromJust $ chunkToHdTl ch
    return $ Just ch == appendTxChunk tx ch' 
 
--- | This corresponds to a key result, Lemma 2.14(2) of <https://arxiv.org/pdf/2003.14271.pdf UTxO- vs account-based smart contractblockchain programming paradigms>.
-prop_validity_fresh :: TC -> Property
-prop_validity_fresh ch = chunkLength ch > 1 ==> unNom $ do -- Nom monad
-   (tx1, tx2, ch') <- fromJust $ chunkToHdHdTl ch
-   let mch2 = appendTxChunk tx1 ch' 
-   return $ (isBlockchain ch && isBlockchain' mch2) <= (tx1 `apart` tx2) 
- 
 {- prop_chunkTailIsPrefix :: TC -> Property 
 prop_tailIsPrefix ch = 
     let mt = chunkTail ch
@@ -286,27 +302,29 @@ prop_tailIsPrefix ch =
     in isJust mt ==> unNom $ isPrefixChunk (fromJust mt) ch 
 -}
 
-prop_renId :: Atom -> Bool
-prop_renId a = renExtend a a idRen == idRen 
-
+-- | If you reverse the order of transactions in a chunk, it need not be valid
 prop_reverseIsNotValid :: TC -> Property 
 prop_reverseIsNotValid ch = expectFailure $ isJust (reverseTxsOf ch) 
 
--- TODO: This runs slowly.  Might be helpful to have a "smaller" arbitrary instance, e.g. prop_subchunksValid :: smallchunk -> Bool and smallChunk is a newtype wrapper around chunk + we overwrite arbitrary instance to either truncate or make smaller thing.  
-prop_subchunksValid :: TC -> Bool 
-prop_subchunksValid ch = and . unNom $ map (isJust . txListToChunk) <$> (subTxListOf ch) 
+prop_subchunksValid :: SmallChunk TR TD TV -> Bool 
+prop_subchunksValid (SmallChunk ch) = and . unNom $ map (isJust . txListToChunk) <$> (subTxListOf ch) 
 -- also subchunk and composition interact
 
+-- | If two transactions are apart, they can be validly combined. 
+-- | Corresponds to Lemma 2.14(1) of <https://arxiv.org/pdf/2003.14271.pdf UTxO- vs account-based smart contractblockchain programming paradigms>.
 prop_apart_is_valid_tx :: TX -> TX -> Bool 
 prop_apart_is_valid_tx vtx1 vtx2 = unNom $ do -- Nom monad
       let [tx1, tx2] = fromValidTx <$> [vtx1, vtx2]
       tx2' <- freshen tx2
       return . isJust $ txListToChunk [tx1, tx2']  
 
+-- | If two chunks are apart, they can be validly combined. 
+-- | Extends Lemma 2.14(1) of <https://arxiv.org/pdf/2003.14271.pdf UTxO- vs account-based smart contractblockchain programming paradigms>.
 prop_apart_is_valid_ch :: TC -> TC -> Bool 
 prop_apart_is_valid_ch ch1 ch2 = unNom $ do -- Nom monad
       ch2' <- freshen ch2
       return . isJust $ (Just ch1) <> (Just ch2')
+
 
 -- A helper to observe equivalence of chunks
 observe :: Maybe TC -> Maybe TC -> Maybe TC -> Bool
@@ -315,18 +333,23 @@ observe mch1 mch2 mch3 =
    &&
      isJust (mch1 <> mch3) == isJust (mch2 <> mch3) 
 
-prop_chunk_apart_commutes :: TC -> TC -> TC -> Bool 
-prop_chunk_apart_commutes ch1 ch2 ch3 = unNom $ do -- Nom monad
+-- | If two chunks are apart, they can be validly commuted. 
+-- | Extends Lemma 2.14(1) of <https://arxiv.org/pdf/2003.14271.pdf UTxO- vs account-based smart contractblockchain programming paradigms>.
+-- We use smaller chunks for speed.
+prop_chunk_apart_commutes :: SmallTC -> SmallTC -> SmallTC -> Bool 
+prop_chunk_apart_commutes (SmallChunk ch1) (SmallChunk ch2) (SmallChunk ch3) = unNom $ do -- Nom monad
       ch2' <- freshen ch2
       return $ observe ((Just ch1) <> (Just ch2'))
                        ((Just ch2') <> (Just ch1)) 
                        (Just ch3) 
 
--- prop_renId a = idRen == (renNub $ renExtend a a idRen) 
--- prop_blockchainValidUnderPrefix :: TB -> TX -> Bool 
--- prop_blockchainValidUnderPrefix 
+-- | This corresponds to a key result, Lemma 2.14(2) of <https://arxiv.org/pdf/2003.14271.pdf UTxO- vs account-based smart contractblockchain programming paradigms>.
+prop_validity_fresh :: TC -> Property
+prop_validity_fresh ch = chunkLength ch > 1 ==> unNom $ do -- Nom monad
+   (tx1, tx2, ch') <- fromJust $ chunkToHdHdTl ch
+   let mch2 = appendTxChunk tx1 ch' 
+   return $ (isBlockchain ch && isBlockchain' mch2) <= (tx1 `apart` tx2) 
+ 
 
 
--- Hd Tl recombining bug 
--- Subtle error in chunkTail and isPrefix
 

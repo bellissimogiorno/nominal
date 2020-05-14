@@ -277,9 +277,9 @@ contextPos (Transaction (Input p _ :| _) _) = p
 -- | Calculate unspent __input contexts__. 
 --
 -- Because we're dealing with transaction lists, we care about dangling /contexts/ (which we call UTxCs). 
-utxcsOfChunk :: forall r d v. (Support r, Support d, Support v) => Chunk r d v -> Nom [Context r d v]
+utxcsOfChunk :: forall r d v. (Support r, Support d, Support v) => Chunk r d v -> Nom [Context r d v] -- the top-level Nom binding here stores the bound names of the chunk, i.e. those participating in an Input-Output binding within the chunk.
 utxcsOfChunk (Chunk x) = x >># \ps txs ->  
-    let cs = concatMap contextsOfTx txs
+    let cs = concatMap contextsOfTx txs   
     in  return $ filter (\c -> contextPos c `notElem` ps) cs  
 
 
@@ -567,7 +567,7 @@ instance Validator r d v => Semigroup (Maybe (Chunk r d v)) where
 instance Validator r d v => Monoid (Maybe (Chunk r d v)) where
    mempty  = Just $ Chunk $ return []
    mappend = (<>)
--- mjg@lbr some question here why no overlapping instance error messages with rule from Data.Monoid
+-- TODO: why no overlapping instance error messages with rule from Data.Monoid?
 
 
 
@@ -584,7 +584,7 @@ isPrefixChunk ch1' ch2 = fromJust $ -- if this fails then something's wrong
          x           -> Just $ supp x `S.isSubsetOf` S.fromList (as ++ as1 ++ as2)
 
 
-chunkLength :: (UnifyPerm r, UnifyPerm d, Swappable r, Swappable d, Swappable v) => Chunk r d v -> Int 
+chunkLength :: (Swappable r, Swappable d, Swappable v) => Chunk r d v -> Int 
 chunkLength ch = unChunk ch $ \_ txs -> length txs 
 
 -- | Calculate the tail of a chunk.  Two monads here:
@@ -669,8 +669,6 @@ blockchain c
 
 -- * Is Chunk / Blockchain check 
 
--- mjg@lbr OK with this code?
-               
 -- | Take a chunk, convert to Nom TxList, reconcatenate with validation, check for overbinding, and provided that it passes, return the result 
 guardChunk :: forall r d v. Validator r d v => Chunk r d v -> Maybe (Chunk r d v)
 guardChunk ch = (unNom `providedThat` isTrivialNomBySupp) nch  -- overbinding protection 
