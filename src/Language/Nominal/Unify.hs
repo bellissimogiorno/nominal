@@ -130,7 +130,7 @@ isNothingRen = not . isJustRen
 
 -- | Elements of @'KRen'@ are compared for equality on their __nub__ @'renNub'@, meaning just that identity mappings are ignored.
 --
--- >>> a = unsafeUnNom $ freshAtom
+-- >>> a = genUnNom $ freshAtom
 -- >>> idRen == renExtend a a idRen
 -- True 
 instance Eq (KRen s) where
@@ -287,14 +287,15 @@ instance (Typeable (s :: k), Typeable (u :: k), KUnifyPerm s t) => KUnifyPerm s 
 -- | Unify 'Nom' abstractions.
 -- Unpack, unify, clean out fresh names
 instance (Typeable s, KUnifyPerm s a) => KUnifyPerm s (KNom s a) where
-   kunifyPerm p noma nomb = nomPred' noma $ \a -> nomPred' nomb $ kunifyPerm p a
+   -- kunifyPerm p noma nomb = resAtC (\a -> resAtC (kunifyPerm p a) nomb) noma  
+   kunifyPerm p noma nomb = resAtC' noma $ \a -> resAtC' nomb $ \b -> kunifyPerm p a b
    ren r m = ren r <$> m
 
 
 -- | Unify 'Abs' name-abstraction
 instance (Typeable s, KUnifyPerm s t, KUnifyPerm s a) => KUnifyPerm s (KAbs (KName s t) a) where
    kunifyPerm p absa absb = 
-      absToRestrict (fuse (absa, absb)) $ \na (a,b) -> kunifyPerm p (na, a) (na, b)
+      (fuse (absa, absb)) @@. \na (a,b) -> kunifyPerm p (na, a) (na, b) -- use of '@@.' here cleans out the (na, na) binding. 
    ren r m = ren r <$> m
 
 

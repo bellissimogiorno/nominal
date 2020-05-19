@@ -69,6 +69,13 @@ import           Language.Nominal.Name
 import           Language.Nominal.NameSet
 import           Language.Nominal.Unify
 
+-- For doctest:
+
+-- $setup
+-- >>> :m +Language.Nominal.Nom
+-- >>> let [a, b, c] = genUnNom $ freshAtoms [(), (), ()]
+
+
 {- $intro
 
 A structure is __equivariant__ when it has a trivial swapping action:
@@ -155,7 +162,7 @@ How do we unify a putative input with a representative to find a matching output
 -}
 
 -- | Equivariantly apply a list of pairs, which we assume represents a map, to an element.
--- Also returns the unifier.
+-- Also returns the source element.
 kevLookupList' :: (KUnifyPerm s a, KUnifyPerm s b) => proxy s -> [(a, b)] -> a -> Maybe (a, b)
 kevLookupList' _ []           _  = Nothing    -- Empty list?  Stop.
 kevLookupList' p ((a, b) : t) a' =            -- Nonempty list? 
@@ -249,6 +256,8 @@ infixr 0 $$
 -- >>> (constEvFinMap 42 :: EvFinMap Char Int) $$ 'x'
 -- 42
 --
+-- >>> (constEvFinMap 0 :: EvFinMap Atom Int) $$ a
+-- 0 
 constEvFinMap :: KUnifyPerm s a => b -> KEvFinMap s a b
 constEvFinMap b = DefAndRep (Nameless b) []
 
@@ -262,14 +271,15 @@ constEvFinMap b = DefAndRep (Nameless b) []
 -- >>> (extEvFinMap 'x' 7 $ (constEvFinMap 42 :: EvFinMap Char Int)) $$ 'y'
 -- 42
 --
--- >>> let [m, n] = unsafeUnNom $ freshNames [(), ()] 
+-- >>> let [m, n, o] = genUnNom $ freshNames [(), (), ()] 
 -- >>> m == n
 -- False
 -- >>> unifiablePerm m n
 -- True
 -- >>> (extEvFinMap m 7 $ (constEvFinMap 42 :: EvFinMap (Name ()) Int)) $$ n
 -- 7
---
+-- >>> (extEvFinMap o 8 (extEvFinMap m 7 $ (constEvFinMap 42 :: EvFinMap (Name ()) Int))) $$ n
+-- 8
 extEvFinMap :: forall s a b. (KUnifyPerm s a, Eq a, Eq b) => a -> b -> KEvFinMap s a b -> KEvFinMap s a b
 extEvFinMap a b f@(DefAndRep (Nameless b') xs) = case kevLookupList' (Proxy :: Proxy s) xs a of
     Nothing
@@ -287,10 +297,17 @@ extEvFinMap a b f@(DefAndRep (Nameless b') xs) = case kevLookupList' (Proxy :: P
 -- finitely many argument-value pairs.
 -- We assume the codomain is @'Nameless'@, as discussed above. 
 --
--- >>> let f = DefAndRep 42 [('x', 7), ('y', 5), ('x', 13)] :: EvFinMap Char Int
+-- >>> let f = evFinMap 42 [('x', 7), ('y', 5), ('x', 13)] :: EvFinMap Char Int
 -- >>> map (f $$) ['x', 'y', 'z']
 -- [13,5,42]
 --
+-- >>> let atmEq = evFinMap False [((a,a), True)] :: EvFinMap (Atom, Atom) Bool 
+-- >>> map (atmEq $$) [(b,b), (c,c), (a,c), (b,c)]
+-- [True,True,False,False]
+--
+-- >>> let g = evFinMap 2 [((a,a), 0), ((b,c), 1)] :: EvFinMap (Atom, Atom) Int 
+-- >>> map (g $$) [(b,b), (c,c), (a,c), (b,c)]
+-- [0,0,1,1]
 evFinMap :: (KUnifyPerm s a, Eq a, Eq b) 
          => b             -- ^ Default value.
          -> [(a, b)]      -- ^ List of exceptional argument-value pairs. In case of conflict, later pairs overwrite earlier pairs.
@@ -299,7 +316,7 @@ evFinMap = L.foldl' (\m (a, b) -> extEvFinMap a b m) . constEvFinMap
 
 -- | Extracts default value und list of exceptional argument-value pairs from an @'EvFinMap'@.
 --
--- >>> fromEvFinMap $ (DefAndRep 42 [('x', 7), ('y', 5), ('x', 13)] :: EvFinMap Char Int)
+-- >>> fromEvFinMap $ (evFinMap 42 [('x', 7), ('y', 5), ('x', 13)] :: EvFinMap Char Int)
 -- (42,[('y',5),('x',13)])
 --
 fromEvFinMap :: KEvFinMap s a b -> (b, [(a, b)])
@@ -307,13 +324,13 @@ fromEvFinMap (DefAndRep (Nameless b') xs) = (b', [(a, b) | (a, Nameless b) <- xs
 
 -- | 'KEvFinMap' is compared for equality by comparing the default value and the representatives, up to permutations.  
 --
--- __Edge case:__ If a codomain type is orbit-finite, and representatives exhaust all possibilities, then the default value will never be queried, yet it will still be considered in our equality test.  
+-- __Edge case:__ If a codomain type is orbit-finite (e.g. @'Bool'@ and @'(Atom,Atom)'@, with two orbits, or @'Atom'@ with one), and representatives exhaust all possibilities, then the default value will never be queried, yet it will still be considered in our equality test.  
 instance (KUnifyPerm s a, Eq b) => Eq (KEvFinMap s a b) where
     f1@(DefAndRep b1 xs1) == f2@(DefAndRep b2 xs2)
         =    (b1 == b2)                                    -- default values equal?
           && all (\(a, Nameless b) -> (f2 $$ a) == b) xs1  -- check equality by representatives 
           && all (\(a, Nameless b) -> (f1 $$ a) == b) xs2
-
+-- TODO: replace with extensionality test
 
 -- This looks like 'Nameless', but 'Nameless' cannot be parameterised over s.
 instance (KUnifyPerm s a, KUnifyPerm s b, Eq b) => KUnifyPerm s (KEvFinMap s a b) where

@@ -6,6 +6,8 @@ import Test.DocTest (doctest)
 
 main :: IO ()
 main = do
+    doctest [ "src/Language/Nominal/Equivar.hs"
+            ]
     doctest [ "src/Language/Nominal/Name.hs"
             ]
     doctest [ "src/Language/Nominal/Examples/IdealisedEUTxO.hs"

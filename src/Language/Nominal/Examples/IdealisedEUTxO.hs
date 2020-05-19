@@ -47,22 +47,22 @@ module Language.Nominal.Examples.IdealisedEUTxO
     -- $validator
        Validator (..), ValTriv (..), Val (..), ValFin (..),
     -- * Chunks
-    -- $chunk
-       Chunk (..), unChunk, transactionValid, singletonChunk, unsafeSingletonChunk, txListToChunk, nomTxListToNomChunk, nomTxListToChunk, 
+    -- $chunks
+       Chunk (..), transactionValid, singletonChunk, unsafeSingletonChunk, txListToChunk, nomTxListToNomChunk, nomTxListToChunk, 
     -- * Examples
     -- $examples
-    exampleCh1, exampleCh2, exampleCh12, exampleCh21, exampleCh12',
+    exampleCh0, exampleCh1, exampleCh2, exampleCh12, exampleCh21, exampleCh12',
     -- * Unspent (dangling) elements: UTxO, UTxI, UTxC
     -- $unspent
-    outputsOfTx, inputsOfTx, contextsOfTx, utxosOfChunk, utxisOfChunk, contextPos, utxcsOfChunk,
+    outputsOfTx, inputsOfTx, txPoint, contextsOfTx, utxosOfChunk, utxisOfChunk, contextPos, utxcsOfChunk,
     -- * Combining and extending chunks
-    appendTxChunk, appendTxMaybeChunk, concatChunk,
+    appendTxChunk, appendTxMaybeChunk, concatChunk, safeConcatChunk,
     -- * Splitting chunks up 
-    isPrefixChunk, chunkLength, chunkTail, chunkHead, warningNotChunkTail, chunkTakeEnd, subTxListOf, reverseTxsOf, chunkToHdTl, chunkToHdHdTl,
+    genUnNomChunk, isPrefixChunk, chunkLength, chunkTail, chunkHead, warningNotChunkTail, chunkTakeEnd, subTxListOf, reverseTxsOf, chunkToHdTl, chunkToHdHdTl,
     -- * Blockchain
     Blockchain, getBlockchain, blockchain,   
     -- * Is Chunk / Blockchain check
-    guardChunk, isChunk, isBlockchain, isBlockchain', 
+    chunkBindingOK, chunkValidatorsOK, isChunk, isChunk', isBlockchain, isBlockchain', 
     -- * Intensional equality of 'Chunk'
     -- $intension
     IEq, equivChunk 
@@ -71,7 +71,7 @@ module Language.Nominal.Examples.IdealisedEUTxO
     )
     where
 
-import           Data.List
+import           Data.List                  as L
 import           Data.List.NonEmpty         (NonEmpty (..))
 import           Data.List.Unique 
 import           Data.List.Extra            (disjoint, takeEnd)
@@ -208,7 +208,9 @@ instance HasInputPositions (Output d v) where
 instance (HasInputPositions a, HasInputPositions b) => HasInputPositions (a,b)
 instance HasInputPositions a => HasInputPositions [a]
 instance HasInputPositions a => HasInputPositions (NonEmpty a)
-instance HasInputPositions (Transaction r d v)
+-- instance HasInputPositions (Transaction r d v) 
+instance HasInputPositions (Transaction r d v) where
+   inputPositions (Transaction is _) = inputPositions is 
 
 -- | A typeclass for types for which we can calculate __output positions__. 
 --
@@ -228,10 +230,12 @@ instance HasOutputPositions (Output d v) where
 instance (HasOutputPositions a, HasOutputPositions b) => HasOutputPositions (a,b)
 instance HasOutputPositions a => HasOutputPositions [a]
 instance HasOutputPositions a => HasOutputPositions (NonEmpty a)
-instance HasOutputPositions (Transaction r d v)
+-- instance HasOutputPositions (Transaction r d v)
+instance HasOutputPositions (Transaction r d v) where
+   outputPositions (Transaction _ os) = outputPositions os 
 
 instance HasOutputPositions a => HasOutputPositions (Nom a) where
-   outputPositions = nomPred outputPositions 
+   outputPositions = resAtC outputPositions 
 
 -- * Unspent (dangling) elements: UTxO, UTxI, UTxC
 {- $unspent
@@ -247,28 +251,40 @@ We care about which inputs point to earlier outputs, and which outputs point to 
 outputsOfTx :: Transaction r d v -> [Output d v]
 outputsOfTx (Transaction _ os) = os
 
--- | Form the contexts of a 'Transaction'.
-contextsOfTx :: (Support r, Support d) => Transaction r d v -> [Context r d v]
-contextsOfTx (Transaction is os) = (\p -> Transaction (atomPoint p is) os) <$> inputPositions is
-
 -- | Return the input-list of a 'Transaction'.
-inputsOfTx :: (Support r, Support d) => Transaction r d v -> [Input r]
-inputsOfTx = map (\(Transaction (i :| _) _) -> i) . contextsOfTx
+inputsOfTx :: Transaction r d v -> [Input r]
+inputsOfTx (Transaction is _) = is
+
+-- | Point a transaction at @p@ 
+txPoint :: Support r => Transaction r d v -> Position -> Context r d v
+txPoint (Transaction is os) p = Transaction (atomPoint p is) os
+ 
+-- | Form the contexts of a 'Transaction'.
+contextsOfTx :: Support r => Transaction r d v -> [Context r d v]
+contextsOfTx tx = txPoint tx <$> inputPositions tx
+-- contextsOfTx (Transaction is os) = (\p -> Transaction (atomPoint p is) os) <$> inputPositions is
+
 
 
 -- | Calculate __unspent outputs__.
 -- 
 -- We tell an output is unspent when its position isn't bound in the enclosing 'Nom' name-context.
 utxosOfChunk :: (Support r, Support d, Support v) => Chunk r d v -> [Output d v]
-utxosOfChunk (Chunk x') =
-   nomPred' x' (concatMap outputsOfTx) -- accumulate outputs listwise.  The 'restrict' implicit in the use of 'nomPred'' filters out outputs that mention bound names.
+utxosOfChunk = resAtC $ concatMap outputsOfTx 
+-- utxosOfChunk ch = ch @@. \_ txs -> concatMap outputsOfTx txs
+-- utxosOfChunk (Chunk x') =
+--   resAtC' x' (concatMap outputsOfTx) -- accumulate outputs listwise.  The 'restrict' implicit in the use of 'resAtC'' filters out outputs that mention bound names.
 
 -- | Calculate __unspent inputs__. 
 --
 -- Because we're dealing with transaction lists, we care about dangling /inputs/ (which we call UTxIs) as well as UTxOs.
 utxisOfChunk :: (Support r, Support d, Support v) => Chunk r d v -> [Input r]
-utxisOfChunk (Chunk x') =
-   nomPred' x' (concatMap inputsOfTx) -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'nomPred'' filters out outputs that mention bound names.
+utxisOfChunk = resAtC $ concatMap inputsOfTx -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAtC' filters out outputs that mention bound names.
+-- utxisOfChunk ch = ch @@. \_ txs -> concatMap inputsOfTx txs -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAtC'' filters out outputs that mention bound names.
+-- utxisOfChunk (Chunk x') = 
+--   resAtC' x' (concatMap inputsOfTx) -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAtC'' filters out outputs that mention bound names.
+-- utxisOfChunk (Chunk x') = 
+--   resAtC' x' (concatMap inputsOfTx) -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAtC'' filters out outputs that mention bound names.
 
 -- | What's the point of my context?   The position @p@ of the first element of the input list of a context is deemed to be the "call site" from which the context tries to find a preceding output (with position @p@) in its @'Chunk'@. 
 contextPos :: Context r d v -> Position
@@ -278,9 +294,8 @@ contextPos (Transaction (Input p _ :| _) _) = p
 --
 -- Because we're dealing with transaction lists, we care about dangling /contexts/ (which we call UTxCs). 
 utxcsOfChunk :: forall r d v. (Support r, Support d, Support v) => Chunk r d v -> Nom [Context r d v] -- the top-level Nom binding here stores the bound names of the chunk, i.e. those participating in an Input-Output binding within the chunk.
-utxcsOfChunk (Chunk x) = x >># \ps txs ->  
-    let cs = concatMap contextsOfTx txs   
-    in  return $ filter (\c -> contextPos c `notElem` ps) cs  
+utxcsOfChunk = nomAt $ \ps txs ->  
+    L.filter (\c -> contextPos c `notElem` ps) (concatMap contextsOfTx txs)
 
 
 -- * Validators
@@ -328,7 +343,8 @@ newtype ValFin r d = ValFin (EvFinMap (d, Context r d (ValFin r d)) Bool)
 instance (UnifyPerm r, UnifyPerm d) => Eq (ValFin r d) where
     ValFin f == ValFin g = f == g  
 
-instance (UnifyPerm r, UnifyPerm d) => KUnifyPerm 'Tom (ValFin r d)
+-- instance (UnifyPerm r, UnifyPerm d) => KUnifyPerm 'Tom (ValFin r d)
+deriving via Nameless (ValFin r d) instance (UnifyPerm r, UnifyPerm d) => KUnifyPerm 'Tom (ValFin r d)
 
 instance (UnifyPerm r, UnifyPerm d) => Validator r d (ValFin r d) where
     validate (ValFin f) d c = f $$ (d, c)  
@@ -340,18 +356,22 @@ instance (UnifyPerm r, UnifyPerm d) => Validator r d (ValFin r d) where
 {- $chunks
 A @'Chunk'@ is a valid list of transactions in a local name-binding context. 
 Validity is enforced by the constructor @'appendTxChunk'@, which imposes a validity check.
---
+
 @'Chunk'@, not @'Blockchain'@, is the fundamental abstraction of our development.
-A blockchain is just a chunk without any UTxIs (see @'isBlockchain'@ and @'utxisOfChunk'@). 
---
-If we slice a chunk up into pieces, we get another chunk.
-In contrast if we slice a blockchain into pieces, we get chunks, not blockchains. 
-Thus, blockchains are not naturally compositional whereas chunks are.
+A blockchain is just a chunk without any UTxIs (see @'isBlockchain'@ and @'utxisOfChunk'@); conversely a chunk is "like a blockchain, but may have UTxIs as well as UTxOs". 
+
+Chunks have properties that blockchains don't.  For instance: 
+
+* If we slice a chunk up into pieces, we get another chunk. 
+* A subchunk of a chunk is still a chunk.
+
+In contrast, if we slice up a blockchain, we get chunks, not blockchains. 
+Thus, blockchains are not naturally compositional and structured in the way that chunks are.
 
 This is a benefit of making the datatype of /chunks/ our primary abstraction.
 -}
 
--- | A @'Chunk'@ is a valid list of transactions in a local name-binding context. 
+-- | A @'Chunk'@ is a valid list of transactions in a local name-binding context.  Think of it as a generalisation of blockhains that allows UTxIs (unspent transaction /inputs/). 
 newtype Chunk r d v = Chunk {chunkToTxList :: Nom [Transaction r d v]}
     deriving (Show, Generic) 
 
@@ -362,12 +382,11 @@ deriving newtype instance (UnifyPerm r, UnifyPerm d, UnifyPerm v) => KUnifyPerm 
 
 deriving newtype instance (Support r, Support d, Support v) => KSupport 'Tom (Chunk r d v)
 
--- | Unpacks a @'Chunk'@ as a transaction-list and applies a function to calculate a @b@. 
-unChunk :: (Swappable r, Swappable d, Swappable v, Restrict b)  
-        => Chunk r d v 
-        -> ([Atom] -> [Transaction r d v] -> b)  
-        -> b 
-unChunk (Chunk nomtxs) = (>>#) nomtxs 
+
+-- | Acts on a @'Chunk'@ by unpacking it as a transaction-list and a list of locally bound atoms, and applying a function. 
+instance Binder (Chunk r d v) [Atom] [Transaction r d v] 'Tom where 
+   (@@) :: Chunk r d v -> ([Atom] -> [Transaction r d v] -> b) -> Nom b
+   (@@) (Chunk nomtxs) = (@@) nomtxs 
 
 
 -- | Chunk equality tests for equality, with permutative unification on the local names
@@ -377,19 +396,20 @@ unChunk (Chunk nomtxs) = (>>#) nomtxs
 -- Note: @'Ren'@ equality compares nubs (non-identity mappings) 
 instance (UnifyPerm r, UnifyPerm d, UnifyPerm v) => Eq (Chunk r d v) where
    ch1 == ch2 = 
-      unChunk ch1 $ \as1 txs1 ->  -- unpack the local bindings of both chunks
-      unChunk ch2 $ \as2 txs2 ->
+      ch1 @@. \as1 txs1 ->  -- unpack the local bindings of both chunks
+      ch2 @@. \as2 txs2 ->
          idRen == renRemoveBlock (as1 ++ as2) (unifyPerm txs1 txs2) -- unify txs1 with txs2 and make sure all renamings are only on the bound atoms 
 
 -- | A @'transaction'@ is valid if (at least) all positions are disjoint 
 transactionValid :: Transaction r d v -> Bool
 transactionValid (Transaction is os) = allUnique $ inputPositions is ++ outputPositions os
 
--- | Tries to create a valid @'Chunk'@ from a single @'Transaction'@.
+-- | Tries to create a valid @'Chunk'@ from a single @'Transaction'@.  If it fails, we get 'Nothing'.
 singletonChunk :: Transaction r d v -> Maybe (Chunk r d v)
 singletonChunk tx = toMaybe (transactionValid tx) $ Chunk (return [tx])
 
--- | Creates a valid @'Chunk'@ from a single @'Transaction'@; causes an error if the transaction is invalid.
+-- | Creates a valid @'Chunk'@ from a single @'Transaction'@.
+-- If it fails (because the transaction is invalid), it raises and error.
 unsafeSingletonChunk :: HasCallStack => Transaction r d v -> Chunk r d v
 unsafeSingletonChunk = fromMaybe err . singletonChunk
   where
@@ -423,6 +443,7 @@ nomTxListToChunk ntxs = do -- Maybe monad
 
 Some example chunks for the reader's convenience and for unit tests.  
 
+* @exampleCh0@ is the chunk containing a trivial transaction with no inputs and no outputs (and one locally bound name, which is not used). 
 * @exampleCh1@ is an output with trivial validator.  Wrapped in a Nom binding to store its position.
 * @exampleCh2@ is an input.  Wrapped in a Nom binding to store its position.
 * @exampleCh12@ is @exampleCh1 <> exampleCh 2@.  Note their positions don't line up.  Also has overbinding! 
@@ -433,6 +454,19 @@ See 'isChunk' and 'isBlockchain' for unit tests.
 
 -}
 
+-- | Example chunk 0: "Chunk [p] [Transaction [] []]"
+--
+-- A chunk containing an empty transaction, with a vacuous binding by some @p@.
+--
+-- Is chunk.  Is blockchain.
+--
+-- >>> isChunk exampleCh0
+-- True
+--
+-- >>> isBlockchain exampleCh0
+-- True
+exampleCh0 :: Chunk Int Int (ValTriv Int Int) 
+exampleCh0 = newA $ \(_p :: Atom) -> fromJust . singletonChunk $ Transaction [] [] 
 
 -- | Example chunk 1: "Chunk [p] [Transaction [] [Output p 0 (const True)]]"
 --
@@ -490,28 +524,29 @@ exampleCh12' = unNom $ do -- Nom monad
 
 -- * Combining and extending chunks
 
-  
+-- | Calculate the input and output positions
+positionsOfTxs :: [Transaction r d v] -> ([Position], [Position])
+positionsOfTxs txs = (inputPositions txs, outputPositions txs) 
+ 
 -- | @'appendTxChunk' tx txs@ adds @tx@ to @txs@, provided that:
 --
 -- * @tx@ is valid
 -- * there is no position name-clash and 
 -- * validators are happy.
 --
--- (see source code for details) 
+-- This is the core of this file.  In a certain sense, everything is just different ways of wiring into this function.
 appendTxChunk :: (HasCallStack, Validator r d v) => Transaction r d v -> Chunk r d v -> Maybe (Chunk r d v)  
-appendTxChunk tx ch = unChunk ch $ \_ txs -> -- use of unChunk here ensures that any atoms bound in ch stay bound in result.  However, the extra atoms in bn below, get added to binding.
-   let txIns   = inputPositions tx 
-       txOuts  = outputPositions tx 
-       txsIns  = inputPositions txs
-       txsOuts = outputPositions txs
-       bn      = intersect txIns txsOuts -- the inputs of @tx@ that point to outputs in @txs@ and so should get bound
+appendTxChunk tx ch = ch @@. \_ txs -> -- use of '@@.' here ensures that any atoms bound in ch stay bound in result.  However, the extra atoms in bn below, get added to binding.
+   let (txIns,  txOuts ) = positionsOfTxs [tx] 
+       (txsIns, txsOuts) = positionsOfTxs txs
+       bn = intersect txIns txsOuts -- the inputs of @tx@ that point to outputs in @txs@ and so should get bound
    in
    toMaybe 
       (   transactionValid tx     -- tx is valid 
        && disjoint txOuts txsOuts -- no outputs in tx clash with outputs in txs
        && disjoint txOuts txsIns  -- no outputs in tx clash with inputs in txs
        && disjoint txIns  txsIns  -- no inputs in tx clash with inputs in txs
-       && all validate' bn)       -- all validators happy with context 
+       && all validate' bn)       -- all validators happy with context   
       (Chunk $ res bn $ tx : txs) -- all OK?  then push tx 
  where
    validate' :: Position -> Bool
@@ -524,7 +559,7 @@ appendTxChunk tx ch = unChunk ch $ \_ txs -> -- use of unChunk here ensures that
 
 -- | Version of @'appendTxChunk'@ that acts directly on @Maybe (Chunk r d v)@.
 appendTxMaybeChunk :: Validator r d v => Transaction r d v -> Maybe (Chunk r d v) -> Maybe (Chunk r d v)
-appendTxMaybeChunk tx = (=<<) (appendTxChunk tx)
+appendTxMaybeChunk = (=<<) . appendTxChunk 
  
 -- | Restrict atoms in a 'Chunk'.
 instance (Swappable r, Swappable d, Swappable v) => KRestrict 'Tom (Chunk r d v) where 
@@ -534,16 +569,18 @@ instance (Swappable r, Swappable d, Swappable v) => KRestrict 'Tom (Chunk r d v)
 -- | Concatenate two @'Chunk'@s, merging their binding contexts in a capture-avoiding manner.
 -- If concatenation is impossible (e.g. because validation fails), defaults to @Chunk Nothing@.
 --
--- __Note:__ No explicit checks are made here that inputs are valid chunks.  In particular, no overbinding protection (overbinding = Nom binder in Chunk binds excess positions not involved in UTxO-UTxI linkage).  If you want such checks, look at 'guardChunk', 'isChunk', and 'isBlockchain'.
+-- __Note:__ No explicit checks are made here that inputs are valid chunks.  In particular, no overbinding protection (overbinding = Nom binder in Chunk binds excess positions not involved in UTxO-UTxI linkage).  If you want such checks, look at 'isChunk' and 'isBlockchain'.
+--
+-- Works by unpacking first chunk as a list of transactions and appending them to 'Just' the second argument.  Local binding of first chunk gets carried over automatically; new local bindings may get generated during the append.
 concatChunk :: Validator r d v => Chunk r d v -> Chunk r d v -> Maybe (Chunk r d v)
-concatChunk (Chunk txs1') ch2 =                                         -- unpack first arg as nom of txs-list 
-    nomPred' txs1' $ foldr appendTxMaybeChunk (Just ch2)                                 -- and append to @ch2@. 
---      where
---        f :: Validator r d v => Transaction r d v -> Maybe (Chunk r d v) -> Maybe (Chunk r d v)
---        f tx = (=<<) (appendTxChunk tx)
---        f _  Nothing   = Nothing
---        f tx (Just ch) = appendTxChunk tx ch
+concatChunk ch1 ch2 = resAtC (foldr appendTxMaybeChunk (Just ch2)) ch1 
 
+
+-- | A version of 'concatChunk' that performs explicit validity checks on its inputs and result. 
+safeConcatChunk :: Validator r d v => Chunk r d v -> Chunk r d v -> Maybe (Chunk r d v)
+safeConcatChunk ch1 ch2 = 
+   guard (isChunk ch1 && isChunk ch2 && isJust (concatChunk ch1 ch2)) 
+   >> (concatChunk ch1 ch2) 
 
 -------------------------------------
 ----- Algebraic properties of Chunk and Maybe Chunk
@@ -565,7 +602,7 @@ instance Validator r d v => Semigroup (Maybe (Chunk r d v)) where
 
 -- | Maybe Chunk forms a monoid, with unit being the empty chunk.
 instance Validator r d v => Monoid (Maybe (Chunk r d v)) where
-   mempty  = Just $ Chunk $ return []
+   mempty  = Just . Chunk . return $ []
    mappend = (<>)
 -- TODO: why no overlapping instance error messages with rule from Data.Monoid?
 
@@ -573,19 +610,30 @@ instance Validator r d v => Monoid (Maybe (Chunk r d v)) where
 
 -- * Splitting chunks up 
 
+-- | For debugging
+genUnNomChunk :: Chunk r d v -> Chunk r d v
+genUnNomChunk = genAtC $ Chunk . return 
+
 -- | Check whether one chunk is a prefix of another.  See @'chunkTail'@ to understand why the @'Nom'@ binding on the first argument is required.
-isPrefixChunk :: (UnifyPerm r, UnifyPerm d, UnifyPerm v, Swappable r, Swappable d, Swappable v) => Nom (Chunk r d v) -> Chunk r d v -> Bool  -- Need @Swappable@ instances for @'unChunk'@ 
-isPrefixChunk ch1' ch2 = fromJust $ -- if this fails then something's wrong 
-   ch1' >>$ \as ch1 ->               -- as = local names in putative prefix 
-   unChunk ch1 $ \as1 txs1 ->  
-   unChunk ch2 $ \as2 txs2 -> 
+isPrefixChunk :: (UnifyPerm r, UnifyPerm d, UnifyPerm v, Swappable r, Swappable d, Swappable v) => Nom (Chunk r d v) -> Chunk r d v -> Bool  -- Need @Swappable@ instances for @'@@.'@ 
+isPrefixChunk ch1' ch2 =     
+   ch1' @@. \as ch1 ->        -- as = local names in putative prefix 
+   ch1  @@. \as1 txs1 ->  
+   ch2  @@. \as2 txs2 -> 
       case evPrefixRen txs1 txs2 of 
-         Ren Nothing -> Just False
-         x           -> Just $ supp x `S.isSubsetOf` S.fromList (as ++ as1 ++ as2)
+         Ren Nothing -> False 
+         r           -> supp r `S.isSubsetOf` S.fromList (as ++ as1 ++ as2) 
 
 
+-- | Calculate the length of a Chunk
 chunkLength :: (Swappable r, Swappable d, Swappable v) => Chunk r d v -> Int 
-chunkLength ch = unChunk ch $ \_ txs -> length txs 
+chunkLength = resAtC L.length 
+
+
+-- | Calculate the head of a chunk.  
+chunkHead :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Nom (Transaction r d v))
+chunkHead ch = transposeNomMaybe $ nomAtC safeHead ch 
+
 
 -- | Calculate the tail of a chunk.  Two monads here:
 --
@@ -593,31 +641,22 @@ chunkLength ch = unChunk ch $ \_ txs -> length txs
 --
 -- * @'Nom'@ ... to bind the names of any positions in newly-exposed UTxOs.
 chunkTail :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Nom (Chunk r d v))
-chunkTail ch = transposeNomMaybe . unChunk ch $ const (return . (txListToChunk =<<) . safeTail)
--- case-style version of chunkTail, for easy comparison with warningNotChunkTail
--- chunkTail ch = transposeNomMaybe . unChunk ch $ \_ txs -> case txs of
---    []         -> return $ Nothing
---    (_ : txs') -> return $ txListToChunk txs'
-
-
--- | Calculate the head of a chunk.  
-chunkHead :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Nom (Transaction r d v))
-chunkHead ch = transposeNomMaybe . unChunk ch $ const (return . safeHead) 
--- chunkHead ch = transposeNomMaybe . unChunk ch $ \_ txs -> case txs of
---    []      -> return $ Nothing
---    (h : _) -> return $ Just h 
+chunkTail ch = transposeNomMaybe $ nomAtC ((=<<) txListToChunk . safeTail) ch 
+-- chunkTail ch = transposeNomMaybe $ nomAtC (\txs -> safeTail txs >>= txListToChunk) ch 
+-- chunkTail ch = transposeNomMaybe $ ch @@ const ((txListToChunk =<<) . safeTail)
 
 
 -- | Compare the code for this function with the code for @'chunkTail'@.  
 -- It looks plausible ... but it's wrong.
 --
--- It looks like it returns the tail of a chunk, and indeed it does.  However, the result is not a chunk because exposed UTxO positions get bound by the Chunk's own Nom binding.
+-- It looks like it returns the tail of a chunk, and indeed it does.  However, the result is not a chunk because positions get exposed due to the use of '@@!'.
 --
 -- See the test 'Language.Nominal.Properties.Examples.IdealisedEUTxOSpec.prop_warningNotChunkTail_is_not_chunk'.
 warningNotChunkTail :: (UnifyPerm r, UnifyPerm d, Swappable r, Swappable d, Swappable v) => Chunk r d v -> Maybe (Chunk r d v)
-warningNotChunkTail ch = unChunk ch $ \_ txs -> case txs of
+warningNotChunkTail = genAtC $ \txs -> (Chunk . return) <$> safeTail txs 
+{-- warningNotChunkTail ch = ch @@. \_ txs -> case txs of
     []         -> Nothing
-    (_ : txs') -> Just $ Chunk $ return txs'  -- Error is here 
+    (_ : txs') -> Just $ Chunk $ return txs'  --}
 
 
 -- | @'take'@, for chunks.  The @'Nom'@ binding captures any dangling UTxOs or UTxIs that are left after truncating the chunk. 
@@ -627,26 +666,26 @@ chunkTakeEnd i ch = fromJust . nomTxListToNomChunk $ takeEnd i <$> chunkToTxList
 
 -- | List of subchunks.  @'Nom'@ binding is to capture dangling UTxOs or UTxIs.
 subTxListOf :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Nom [[Transaction r d v]] 
-subTxListOf ch = unChunk ch $ \_ txs -> return $ subsequences txs
+subTxListOf = nomAtC subsequences 
 
 
 -- | Take a chunk and reverse its transactions.  Usually this will result in an invalid chunk, in which case we get @Nothing@.  
 -- Used for testing. 
 reverseTxsOf :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Chunk r d v) 
-reverseTxsOf ch = nomTxListToChunk $ unChunk ch $ \_ txs -> return (reverse txs)
+reverseTxsOf = nomTxListToChunk . nomAtC L.reverse -- TODO: could improve further by losing nom? 
+-- reverseTxsOf ch = nomTxListToChunk $ ch @@ const L.reverse 
 
 -- | Split a chunk into a head and a tail.
 chunkToHdTl :: Validator r d v => Chunk r d v -> Maybe (Nom (Transaction r d v, Chunk r d v))
-chunkToHdTl (Chunk x') = x' >>$ \atms x -> case x of
+chunkToHdTl (Chunk x') = transposeNomMaybe $ x' @@ \_ x -> case x of
    []       -> Nothing
-   (tx:txs) -> Just $ res atms (tx, fromJust $ txListToChunk txs)
+   (tx:txs) -> Just $ (tx, fromJust $ txListToChunk txs)
 
 -- | Split a chunk into a head and a head and a tail.
 chunkToHdHdTl :: Validator r d v => Chunk r d v -> Maybe (Nom (Transaction r d v, Transaction r d v, Chunk r d v))
-chunkToHdHdTl (Chunk x') = x' >>$ \atms x -> case x of
-   []  -> Nothing
-   [_]  -> Nothing
-   (tx1:tx2:txs) -> Just $ res atms (tx1, tx2, fromJust $ txListToChunk txs)
+chunkToHdHdTl (Chunk x') = transposeNomMaybe $ x' @@ \_ x -> case x of
+   (tx1:tx2:txs) -> Just $ (tx1, tx2, fromJust $ txListToChunk txs)
+   _             -> Nothing
 
 
 -- * Blockchain 
@@ -661,27 +700,29 @@ instance (UnifyPerm r, UnifyPerm d, UnifyPerm v) => KUnifyPerm 'Tom (Blockchain 
 
 -- | Smart constructor for a @'Blockchain'@. 
 -- Ensures only valid blockchains are constructed, by testing for @'isBlockchain'@.
-blockchain :: (HasCallStack, Validator r d v) => Chunk r d v -> Blockchain r d v
+blockchain :: (HasCallStack, Validator r d v) => Chunk r d v -> Blockchain r d v  
 blockchain c
     | isBlockchain c = Blockchain c
-    | otherwise      = error "blockchain: invalid chunk or dangling inputs"
+    | otherwise      = error ("blockchain: invalid chunk or dangling inputs") 
 
 
 -- * Is Chunk / Blockchain check 
 
--- | Take a chunk, convert to Nom TxList, reconcatenate with validation, check for overbinding, and provided that it passes, return the result 
-guardChunk :: forall r d v. Validator r d v => Chunk r d v -> Maybe (Chunk r d v)
-guardChunk ch = (unNom `providedThat` isTrivialNomBySupp) nch  -- overbinding protection 
-   where
-      nch :: Nom (Maybe (Chunk r d v))
-      nch = txListToChunk <$> (chunkToTxList ch)   -- take it apart and put it together with transaction validation 
+-- | Check that the correct atoms are bound in a 'Chunk'.
+chunkBindingOK ::  Validator r d v => Chunk r d v -> Bool 
+chunkBindingOK = resAt $ \ps txs -> let (ips, ops) = positionsOfTxs txs in 
+   ps `intersect` (ips ++ ops) == ips `intersect` ops 
+
+-- | Check that validators are happy, by taking a 'Chunk' apart and putting it together again.
+chunkValidatorsOK :: Validator r d v => Chunk r d v -> Bool 
+chunkValidatorsOK = resAtC $ isJust . txListToChunk   -- take it apart and put it together with transaction validation 
 
 -- | Is this a valid chunk?  ('exampleCh1', 'exampleCh2', 'exampleCh12', 'exampleCh21') 
 --
--- >>> nomPred isChunk exampleCh1
+-- >>> resAtC isChunk exampleCh1
 -- True 
 --
--- >>> nomPred isChunk exampleCh2
+-- >>> resAtC isChunk exampleCh2
 -- True 
 --
 -- >>> isChunk exampleCh12
@@ -690,15 +731,22 @@ guardChunk ch = (unNom `providedThat` isTrivialNomBySupp) nch  -- overbinding pr
 -- >>> isChunk exampleCh21
 -- True
 isChunk :: Validator r d v => Chunk r d v -> Bool 
-isChunk = isJust . guardChunk 
+isChunk ch = chunkBindingOK ch && chunkValidatorsOK ch 
 
--- | A 'Chunk' is a blockchain when it has no UTxI (unspent transaction /inputs/) and is a valid chunk.  ('exampleCh1', 'exampleCh2', 'exampleCh12', 'exampleCh21') 
-
+-- | Is this a valid chunk?  Test by splitting it into a transaction list and putting it back together again. 
 --
--- >>> nomPred isBlockchain exampleCh1
+isChunk' :: (Validator r d v, UnifyPerm r, UnifyPerm d, UnifyPerm v) => Chunk r d v -> Bool 
+isChunk' ch = Just ch == genAtC txListToChunk (chunkToTxList ch) 
+
+-- | A blockchain is a valid 'Chunk' with no UTxI (unspent transaction /inputs/).  ('exampleCh1', 'exampleCh2', 'exampleCh12', 'exampleCh21') 
+--
+-- >>> isBlockchain exampleCh0
 -- True
 --
--- >>> nomPred isBlockchain exampleCh2
+-- >>> resAtC isBlockchain exampleCh1
+-- True
+--
+-- >>> resAtC isBlockchain exampleCh2
 -- False 
 --
 -- >>> isBlockchain exampleCh12
@@ -707,8 +755,8 @@ isChunk = isJust . guardChunk
 -- >>> isBlockchain exampleCh21
 -- True 
 isBlockchain :: Validator r d v => Chunk r d v -> Bool
-isBlockchain ch = (null . utxisOfChunk) ch  -- no dangling inputs
-               && isChunk ch                -- is a valid chunk (e.g. no overbinding) 
+isBlockchain ch = (L.null . utxisOfChunk) ch  -- no dangling inputs
+               && isChunk ch                  -- is a valid chunk (e.g. no overbinding) 
 
 
 -- | Blockchain check for 'Maybe' a 'Chunk'.

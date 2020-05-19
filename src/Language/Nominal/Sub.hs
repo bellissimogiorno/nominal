@@ -32,16 +32,19 @@ module Language.Nominal.Sub
    ( -- * Substitution
      KSub (..)
    , Sub
+   , subAt, atSub
    -- * Test
    -- $test
    ) 
     where
 
 import GHC.Generics         
--- import Type.Reflection 
+import Type.Reflection 
 import Data.List.NonEmpty (NonEmpty)
 
 import Language.Nominal.Name 
+import Language.Nominal.Nom
+import Language.Nominal.Abs
 
 -- * Substitution
 
@@ -82,6 +85,20 @@ instance (KSub n x a, KSub n x b) => KSub n x (Either a b)
 -- | sub on names
 instance KSub (KName s n) (KName s n) (KName s n) where -- We could legitimately insist on Typeable (s :: k), KSwappable k n, Eq n here, but we do not because names are compared for equality by atom.
    sub n n' a = if a == n then n' else a 
+
+
+-- | Nameless form of substitution, where the name for which we substitute is packaged in a @'KAbs'@ abstraction. 
+subAt :: KSub (KName s n) x y => KAbs (KName s n) y -> x -> y
+subAt y' x = y' @@! flip sub x 
+-- subM y' x = y' @$ \n y -> sub n x y
+-- | Nameless form of substitution, where the name for which we substitute is packaged in a @'KAbs'@ abstraction ('flip'ped version). 
+atSub :: KSub (KName s n) x y => x -> KAbs (KName s n) y -> y
+atSub = flip subAt
+
+-- | sub on a nominal abstraction substitutes in the label, and substitutes capture-avoidingly in the body
+instance (Typeable (s :: k), Typeable (u :: k), KSub (KName s n) x t, KSub (KName s n) x y, KSwappable k t, KSwappable k y) => 
+            KSub (KName s n) x (KAbs (KName u t) y) where
+  sub n x = genAt $ \n' y -> abst (sub n x <$> n') $ sub n x y 
 
 
 -- * Generics support for @'KSub'@

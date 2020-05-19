@@ -101,8 +101,8 @@ type MyName = Name MyNameLabel
 a' = freshName "a"
 
 a, b :: MyName
-a = unsafeUnNom a'
-b = unsafeUnNom $ freshName "b"
+a = genUnNom a'
+b = genUnNom $ freshName "b"
 
 
 
@@ -182,18 +182,18 @@ theEnd = True
    This is because evaluation is lazy, so two copies of @a'@ are created in two distinct local name-binding contexts; 
    one to the left of the @'=='@ and the other to the right.
    
-   But we can unpack that context using @'unsafeUnNom'@.  Though it has 'unsafe' in the name, all it does is trigger the computation of actual fresh identifiers for any bindings:
+   But we can unpack that context using @'genUnNom'@.  This triggers the computation of actual fresh identifiers for any bindings:
   
-   >>> let a = unsafeUnNom a' :: MyName
+   >>> let a = genUnNom a' :: MyName
 
    Is @a == a@?
    
    >>> a == a
    True
 
-   Yes!  @a@ is just a plain datum, whose name-identifier was generated fresh a moment ago when we invoked @'unsafeUnNom'@.  So if we do this again:
+   Yes!  @a@ is just a plain datum, whose name-identifier was generated fresh a moment ago when we invoked @'genUnNom'@.  So if we do this again:
 
-   >>> let b = unsafeUnNom a' :: MyName
+   >>> let b = genUnNom a' :: MyName
    >>> a == b
    False
 
@@ -291,13 +291,13 @@ theEnd = True
    
    Likewise:
    
-   >>> let c = (unsafeUnNom $ freshName "a") :: MyName
+   >>> let c = (genUnNom $ freshName "a") :: MyName
    >>> abst b [a, b]  ==  abst c [a, c] 
    True
 
    __Warning:__ The label of the abstracted name is preserved; only its identifier gets alpha-converted.  Thus, this returns false, just because @"a" /= "d"@:
    
-   >>> let d = (unsafeUnNom $ freshName "d") :: MyName
+   >>> let d = (genUnNom $ freshName "d") :: MyName
    >>> abst b [a, b]  ==  abst d [a, d] 
    False 
 
@@ -333,7 +333,7 @@ theEnd = True
    Our machinery now pays dividends.  Abstraction is functorial, and capture-avoidance is automagical: 
  
    >>> let aTob = (map $ \n -> if n == a then b else n) :: [MyName] -> [MyName]
-   >>> let c = (unsafeUnNom $ freshName "a") :: MyName
+   >>> let c = (genUnNom $ freshName "a") :: MyName
    >>> (aTob <$> abst a [a, b])  ==  abst a [a, b] 
    True
    >>> (aTob <$> abst b [a, b])  ==  abst c [b, c]  
@@ -356,7 +356,7 @@ theEnd = True
 -- * Swapping
 {- $swapping
 
->>> let [a, b, c] = unsafeUnNom $ freshNames ["a", "b", "c"]
+>>> let [a, b, c] = genUnNom $ freshNames ["a", "b", "c"]
 
 We can swap @a@ and @b@ in simple types like lists ...
 
@@ -386,7 +386,7 @@ True
 {- $unify
    Recall @x1@ and @x2@ above; let's reconstruct them here:
 
-   >>> let [a, b] = unsafeUnNom $ freshNames ["a", "b"] 
+   >>> let [a, b] = genUnNom $ freshNames ["a", "b"] 
    >>> let x1 = resN [a,b] (a,a,b) :: Nom (MyName, MyName, MyName)
    >>> let x2 = x1                 :: Nom (MyName, MyName, MyName)
    
@@ -409,7 +409,7 @@ True
 We have a theory of substitution given by a typeclass @'Sub'@ with function @'sub'@.
 This works automatically on simple datatypes (like lists and name-abstractions) and can be extended using typeclasses to more complex datatypes (see "Language.Nominal.Examples.SystemF").
 
->>> [a, b, b', c] = unsafeUnNom $ freshNames [(), (), (), ()] 
+>>> [a, b, b', c] = genUnNom $ freshNames [(), (), (), ()] 
 >>> sub a b [a,b,c] == [b,b,c]
 True
 >>> (sub a b $ abst b [a,b,c]) == abst b' [b, b', c]
@@ -443,16 +443,16 @@ Because our identifiers have no semantic content aside from pointing to themselv
 Atoms are interesting because they give us swapping, and swapping gives us 'res' and 'abst'. 
 Names (i.e. labelled atoms) are built /on top of/ this underlying structure.  (So even if we only exposed names and not atoms, the atoms would still be there.) 
 
-Sometimes functions come in two versions: an atoms-version and a names-version.  Examples include 'swp' and 'swpN', and 'res' and 'resN'.  
+Sometimes functions come in two versions: an atoms-version and a names-version (e.g. 'swp' and 'swpN', and 'res' and 'resN'). 
 Where this occurs, the N (for 'Name') version just discards labels and calls the atoms-version.
 
 /Instead of names, why not maintain a state lookup monad, associating atoms to their semantic information?/
-We could, but then we'd have to thread this moand through all our computations (if they need labelled atoms), and this would incur overhead and defeat the very purpose of the design of this package, which is designed precisely to /not/ require everything to always happen inside a 'Nom' monad (see for example @prop_split_scope@ above).
-It is a fundamental principle of nominal techniques that /names are data/, and pure data should not require an omnipresent top-level monad.
+We could, but we'd have to thread it through our computations (if they need labelled atoms), incurring overhead that defeats a purpose of the design of this package, to /not/ require everything to happen inside a 'Nom' monad (see for example @prop_split_scope@ above).
+It is a principle of nominal techniques that /names are data/: pure data should not require an omnipresent top-level monad.
 
-__Gotcha:__ Names are compared for equality on their atoms, and labels are discarded during the equality check:
+__Gotcha:__ Names are compared for equality on their atoms.  Labels are discarded during the equality check:
 
->>> a = unsafeUnNom $ freshName "a" 
+>>> a = genUnNom $ freshName "a" 
 >>> b = a `withLabel` "b"
 >>> a == b
 True
@@ -463,7 +463,7 @@ Wait, we can explain!
 
 * We get "Data.Map" on name-types, again even if the labels lack 'Eq' or 'Ord'.
  
-* Actually, you shouldn't have multiple instances of one atomic ID labelled with different tags.  Or if you do, it's up to you the programmer to choose which label (or combination of labels) is "right".  This package makes it easy to create fresh atoms, so if required, it's easy to create multiple fresh atoms and give a distinct label to each.
+* Why have multiple instances of one atomic ID labelled with different tags?  If you must, you can, but then it's up to you to track which label (or combination of labels) is "right".  This package makes it easy to create fresh atoms, so if required, it's easy to create multiple fresh atoms and give a distinct label to each.
 
 
 -}

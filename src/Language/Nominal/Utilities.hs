@@ -11,7 +11,6 @@ Helper functions
 -}
 
 {-# LANGUAGE FlexibleInstances     
---           , UndecidableInstances    
            , InstanceSigs          
            , MultiParamTypeClasses 
            , FlexibleContexts      
@@ -27,6 +26,7 @@ import           Data.List
 import           Data.Maybe
 import           Data.List.NonEmpty (NonEmpty (..))
 import           GHC.Stack          (HasCallStack)
+import           Control.Monad      (guard) 
 
 -- * Utilities
 
@@ -35,6 +35,7 @@ import           GHC.Stack          (HasCallStack)
 mkCong :: ((a -> a) -> a -> a) -> (a -> Maybe a) -> a -> a
 mkCong g f x = fromMaybe (g (mkCong g f) x) (f x)
 
+-- | Typeclass for types with a notion of congruence
 class Cong a where
    congRecurse :: (a -> a) -> a -> a
    cong :: (a -> Maybe a) -> a -> a
@@ -44,14 +45,6 @@ class Cong a where
 repeatedly :: Eq a => (a -> a) -> a -> a
 repeatedly f x = if f x == x then x else repeatedly f (f x)
 
--- | Applies function provided condition holds
---
--- > (f `providedThat` (const True)) a  = f a
--- > (f `providedThat` (const False)) a = Nothing
-providedThat :: (a -> Maybe b) -> (a -> Bool) -> a -> Maybe b 
-providedThat f tst a = if tst a then f a else Nothing
-
-
 
 -- | Apply a list of functions in succession.
 chain :: [a -> a] -> a -> a
@@ -60,28 +53,22 @@ chain = foldr (.) id
 
 -- | Standard function, returns @Just a@ provided @True@, and @Nothing@ otherwise 
 toMaybe :: Bool -> a -> Maybe a
-toMaybe True  a = Just a
-toMaybe False _ = Nothing
+toMaybe b a = guard b >> return a
 
- 
 -- | List subset.  Surely this must be in a library somewhere.
 isSubsetOf :: Eq a => [a] -> [a] -> Bool 
 isSubsetOf l1 l2 = all (`elem` l2) l1
 
-
+-- | Interleave a list of lists to a list
 interleave :: [[a]] -> [a]
 interleave = concat . transpose
 
-areAny :: [a] -> (a -> Bool) -> Bool
-areAny = flip any
-
-areElem :: Eq a => [a] -> a -> Bool
-areElem = flip elem 
-
+-- | Returns 'Just' the tail of a list if it can, and 'Nothing' otherwise.
 safeTail :: [a] -> Maybe [a]
 safeTail (_ : xs) = Just xs
 safeTail _        = Nothing
 
+-- | Returns 'Just' the head of a list if it can, and 'Nothing' otherwise.
 safeHead :: [a] -> Maybe a
 safeHead (h : _) = Just h 
 safeHead _       = Nothing

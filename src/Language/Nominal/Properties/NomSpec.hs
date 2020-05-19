@@ -40,7 +40,7 @@ prop_fresh_neq' = let x = freshName () in x /= x
 
 -- | Same thing using @let@. 
 prop_fresh_neq'' :: Bool 
-prop_fresh_neq'' = let x = unsafeUnNom (freshName ()) in x == x
+prop_fresh_neq'' = let x = genUnNom (freshName ()) in x == x
 
 -- | But if we unpack a single fresh name monadically, we can compare it for equality.
 prop_fresh_eq :: Bool 

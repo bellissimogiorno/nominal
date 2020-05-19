@@ -160,7 +160,7 @@ freshAtomIO = head <$> freshAtomsIO [()]
 -- > swp a b (res [n] x)  == res [swp a b n] (swp a b x)
 -- > swp a b (Name t x)   == Name (swp a b t) (swp a b x)
 --
--- __Technical note:__ The content of @KSwappable k a@ is that @a@ supports a swapping action by atoms of every @s :: k@.  Everything else, e.g. 'KSupport', just uses @s@.  So @k@ is a "world" of sorts of atoms, for a particular application.
+-- __Technical note:__ The content of @KSwappable k a@ is that @a@ supports a swapping action by atoms of every @s :: k@.  Everything else, e.g. 'Language.Nominal.Nameset.KSupport', just uses @s@.  So @k@ is a "world" of sorts of atoms, for a particular application.
 -- This is invisible at our default world @'Tom'@ because @'Tom'@ has only one inhabitant, @''Tom'@.  See 'Language.Nominal.Examples.SystemF.ASort' and surrounding code for a more sophisticated atoms setup.
 class KSwappable k a where  
 

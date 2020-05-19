@@ -23,6 +23,7 @@ import Control.Monad                              (replicateM)
 import Data.List.NonEmpty                         (NonEmpty (..))
 import Data.Maybe                                 (fromJust, isJust)
 import Data.Proxy                                 (Proxy (..))
+import qualified Data.Set as S 
 import GHC.Generics
 import Numeric.Partial.Semigroup
 import Numeric.Partial.Monoid
@@ -136,10 +137,30 @@ instance (Support r, Support d) => Fixable r d (Val r d) where
 
 instance (Eq r, UnifyPerm r, Eq d, UnifyPerm d) => Fixable r d (ValFin r d) where
     fixOutput c@(Transaction (Input p _ :| _) _) (Output _ d (ValFin f)) =
-        Output p d (ValFin $ extEvFinMap (d, c) True f) 
+          Output p d (ValFin $ extEvFinMap (d, c) True f) 
 
 instance (Support r, Support d) => Fixable r d (ValTriv r d) where
     fixOutput (Transaction (Input p _ :| _) _) (Output _ d v) = Output p d v
+
+
+fixChunkToBlockchain :: (Arbitrary d, Arbitrary v, Fixable r d v) 
+   => Chunk r d v -> Gen (Blockchain r d v) 
+fixChunkToBlockchain chunk 
+   | isBlockchain chunk = return $ blockchain chunk
+   | otherwise = do -- Gen monad 
+       -- get the utxcs of the chunk, still in a Nom binding
+       let utxcsCh' = utxcsOfChunk chunk
+       -- generate an arbitrary output for each utxc /first/ 
+       os' <- replicateM (resAtC length utxcsCh') arbitrary -- :: Gen (Output d v) 
+       -- and only /then/ unpack the list of utxcs.  Fresh atoms generated are for input-output bindings and should not interfere with atoms in os' 
+       let cs = genUnNom $ utxcsCh' 
+       -- fix each output so it matches the relevant utxc.
+       let os = map (uncurry fixOutput) (zip cs os')  
+       -- make genesis block
+       let genesis = unsafeSingletonChunk (Transaction [] os)
+       -- add it to the chunk and parcel it up as a blockchain
+       -- genesis block is on the right because lists grow from right-to-left in Haskell 
+       return . blockchain . fromJust $ chunk `padd` genesis 
 
 instance ( Arbitrary r
          , Support r 
@@ -148,24 +169,7 @@ instance ( Arbitrary r
          , Arbitrary v
          , Fixable r d v
          ) => Arbitrary (Blockchain r d v) where
-    arbitrary = do -- Gen monad
-        (chunk :: Chunk r d v) <- arbitrary 
-        if isBlockchain chunk
-            then return $ blockchain chunk
-            else do -- Gen monad 
-                -- get the utxcs of the chunk, still in a Nom binding
-                let utxcsCh' = utxcsOfChunk chunk
-                -- generate an arbitrary output for each utxc /first/ 
-                os' <- replicateM (nomPred length utxcsCh') (arbitrary :: Gen (Output d v)) 
-                -- and only /then/ unpack the list of utxcs.  Fresh atoms generated are for input-output bindings and should not interfere with atoms in os' 
-                let cs = unsafeUnNom $ utxcsCh' 
-                -- fix each output so it matches the relevant utxc.
-                let os = map (uncurry fixOutput) (zip cs os')  
-                -- make genesis block
-                let genesis = unsafeSingletonChunk (Transaction [] os)
-                -- add it to the chunk and parcel it up as a blockchain
-                -- genesis block is on the right because lists grow from right-to-left in Haskell 
-                return . blockchain . fromJust $ chunk `padd` genesis 
+    arbitrary = arbitrary >>= fixChunkToBlockchain 
 
     shrink = const [] -- TODO: We need something better here
 
@@ -185,17 +189,17 @@ instance ( Arbitrary r
 -- a random validator type will be picked for each test. We could extend this to include more different validator types
 -- and also to include types for redeemers and/or datum if we want.
 
--- Types 1
+{-- Types 1
 type TR = () 
 type TD = () 
 type TV = ValTriv TR TD 
---
-
-{-- Types 2 
-type TR = Int  
-type TD = Int
-type TV = ValFin TR TD
 --}
+
+-- Types 2 
+type TR = Int  
+type TD = Int   
+type TV = ValFin TR TD
+--
 
 type TC = Chunk TR TD TV
 type SmallTC = SmallChunk TR TD TV
@@ -229,13 +233,32 @@ valFin = ValProxy atValFin
 withVal :: (forall v proxy. CVal v => proxy v -> a) -> ValProxy -> a
 withVal f (ValProxy p) = f p
 
--- | Sanity check: every arbitrary chunk is valid.
+-- | Sanity check: every arbitrary chunk is indeed a valid chunk.
 prop_arbitraryChunkIsValid :: TC -> Bool
 prop_arbitraryChunkIsValid = isChunk
+
+-- | Sanity check: every arbitrary chunk is indeed a valid chunk (alternate test).
+prop_arbitraryChunkIsValid' :: TC -> Bool
+prop_arbitraryChunkIsValid' = isChunk'
+
+-- | Sanity check: every arbitrary chunk is equal to itself (not trivial because 'Eq' instance is nontrivial)
+prop_arbitraryChunkEqCheck :: TC -> Bool
+prop_arbitraryChunkEqCheck ch = ch == ch
+
 
 -- | Sanity check: not every chunk is a blockchain (might have UTxIs)! 
 prop_notEveryChunkBlockchain :: TC -> Property 
 prop_notEveryChunkBlockchain c = expectFailure $ isBlockchain c
+
+
+-- | Sanity check: an arbitrary transaction is indeed a valid transaction.
+prop_arbitraryTxIsValid :: TX -> Bool
+prop_arbitraryTxIsValid = transactionValid . fromValidTx
+
+-- | Sanity check: an arbitrary blockchain is indeed a valid blockchain.
+prop_arbitraryBlockchainIsValid :: TB -> Bool
+prop_arbitraryBlockchainIsValid = isBlockchain . getBlockchain
+
 
 -- | Sanity check: arbitrary instance of TB generates a blockchain, which is equal to itself.
 --
@@ -267,16 +290,26 @@ prop_chunkTail_is_chunk ch = chunkLength ch > 0 ==> isJust $ chunkTail ch
 prop_chunkTail_is_prefix :: TC -> Property 
 prop_chunkTail_is_prefix ch = chunkLength ch > 0 ==> isPrefixChunk (fromJust $ chunkTail ch) ch 
 
-unsafeChunkTail :: (UnifyPerm r, UnifyPerm d, UnifyPerm v, Validator r d v) => Chunk r d v -> Maybe (Chunk r d v)
-unsafeChunkTail ch = fmap unsafeUnNom $ chunkTail ch
+-- | The tail of a chunk, generating fresh atoms if required 
+genChunkTail :: (UnifyPerm r, UnifyPerm d, UnifyPerm v, Validator r d v) => Chunk r d v -> Maybe (Chunk r d v)
+genChunkTail ch = fmap genUnNom $ chunkTail ch
 
 -- | The tail of a chunk, is a prefix of the original chunk.  Gotcha version, that doesn't have the Nom bindings: expect failure here.
 prop_chunkTail_is_prefix_gotcha :: TC -> Property 
-prop_chunkTail_is_prefix_gotcha ch = expectFailure $ chunkLength ch > 0 ==> isPrefixChunk (return . fromJust $ unsafeChunkTail ch) ch 
+prop_chunkTail_is_prefix_gotcha ch = expectFailure $ chunkLength ch > 0 ==> isPrefixChunk (return . fromJust $ genChunkTail ch) ch 
 
--- | We demonstrate that the plausible-but-wrong @'warningNotChunkTail'@ is wrong: expect failure here. 
+-- | Plausible-but-wrong @'warningNotChunkTail'@ is wrong: expect failure here. 
 prop_warningNotChunkTail_is_not_chunk :: TC -> Property 
-prop_warningNotChunkTail_is_not_chunk ch = expectFailure $ chunkLength ch > 0 ==> (isJust . nomTxListToChunk) ((chunkToTxList . fromJust . warningNotChunkTail) ch)
+prop_warningNotChunkTail_is_not_chunk ch = expectFailure $ chunkLength ch > 0 ==> fromJust $ isChunk <$> warningNotChunkTail ch
+-- prop_warningNotChunkTail_is_not_chunk ch = expectFailure $ chunkLength ch > 0 ==> (isJust . nomTxListToChunk) ((chunkToTxList . fromJust . warningNotChunkTail) ch)
+
+-- | /Underbinding/ is when not enough atoms are bound in a chunk 
+prop_underbinding :: TC -> Property
+prop_underbinding ch = expectFailure $ isChunk $ ch @@! \_ txs -> Chunk (return txs) 
+
+-- | /Overbinding/ is when too many atoms are bound in a chunk 
+prop_overbinding :: TC -> Property
+prop_overbinding ch = expectFailure $ isChunk $ restrict (S.toList $ supp ch) ch 
 
 -- | Gotcha: Fails because loss of information from two Nom bindings.
 prop_chunkHead_chunkTail_recombine :: TC -> Property
@@ -350,6 +383,4 @@ prop_validity_fresh ch = chunkLength ch > 1 ==> unNom $ do -- Nom monad
    let mch2 = appendTxChunk tx1 ch' 
    return $ (isBlockchain ch && isBlockchain' mch2) <= (tx1 `apart` tx2) 
  
-
-
 

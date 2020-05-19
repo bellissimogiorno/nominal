@@ -34,6 +34,9 @@ import Language.Nominal.Properties.AbsSpec
 import Language.Nominal.Properties.Examples.SystemFSpec 
 
 import Test.QuickCheck 
+
+-- mjg to update
+
 -- import Test.QuickCheck.All
 
 {--------------------------

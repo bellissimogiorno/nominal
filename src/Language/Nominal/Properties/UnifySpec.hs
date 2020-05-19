@@ -33,7 +33,7 @@ prop_res_res ns' ns x = unifiablePerm (restrict ns' (res ns x)) (restrict ns (re
 
 -- | x' -> ns x -> res ns x unifies with x'
 prop_res_unres :: Nom [Name Int] -> Bool
-prop_res_unres x' = x' >>$ \atms x -> unifiablePerm x' $ res atms x
+prop_res_unres x' = x' @@! \atms x -> unifiablePerm x' $ res atms x
 
 -- | Unifiers correctly calculated 
 prop_unify_ren :: [Name ()] -> [Name ()] -> Property 

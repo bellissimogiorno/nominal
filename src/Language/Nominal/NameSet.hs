@@ -74,6 +74,7 @@ class (Typeable s, KSwappable k a) => KSupport (s :: k) a where
     default ksupp :: (Generic a, GSupport s (Rep a)) => proxy s -> a -> Set (KAtom s)
     ksupp _ = gsupp . from
 
+-- | A ''Tom' instance of 'KSupport'. 
 type Support a = KSupport 'Tom a
 
 supp :: Support a => a -> Set Atom
@@ -147,7 +148,7 @@ namePoint = atomPoint . nameAtom
 class (Typeable s, KSwappable k a) => KRestrict (s :: k) a where
    restrict  :: [KAtom s] -> a -> a   
 
--- | Instance of 'KRestrict' on a ''Tom''.
+-- | Instance of 'KRestrict' on a ''Tom'.
 type Restrict = KRestrict 'Tom
 
 -- | Form of restriction that takes names instead of atoms.  Just discards name labels and calls @'restrict'@.

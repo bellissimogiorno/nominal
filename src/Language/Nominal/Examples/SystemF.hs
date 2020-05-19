@@ -47,7 +47,7 @@ module Language.Nominal.Examples.SystemF
 -- * Pretty-printer
     PP (..),  
 -- * Helper functions for building terms 
-    tall, tlam, lam, (@.), (@@.),
+    tall, tlam, lam, (@.), (@:),
 -- * Example terms
     idTrm, idTrm2, zero, suc, one, nat, church, transform, selfapp
 -- * Tests
@@ -60,7 +60,7 @@ import GHC.Generics
 
 import Language.Nominal.Utilities 
 import Language.Nominal.Name 
--- import Language.Nominal.Nom
+import Language.Nominal.Nom
 import Language.Nominal.Abs 
 import Language.Nominal.Sub 
 
@@ -68,7 +68,7 @@ import Language.Nominal.Sub
 
 System F is a classic example and has some interesting features:
 
-* Two kinds of variable: /type variables/and /term variables/.
+* Two kinds of variable: /type variables/ and /term variables/.
 * Three kinds of binding: /type forall/ binding a type variable in a type; /term lambda/ binding a term variable in a term; and /type lambda/ binding a type variable in a term.
 * A static assignment of semantic information to term variables, namely: a /type assignment/.  Thus intuitively term variables carry labels (types), which themselves may contain type variables.
 * And it's an expressive system of independent mathematical interest.
@@ -138,11 +138,11 @@ instance KSub NTyp Typ Typ where
       (TVar n) -> toMaybe (a == n) t -- note name-equality is atom-wise and ignores labels 
       _        -> Nothing
 
--- | Nominal recursion scheme.  We never use it because it's implicit in pattern-matching plus `@$`.
+-- | Nominal recursion scheme.  We never use it because it's implicit in pattern-matching plus `@@!`.
 typRecurse :: (NTyp -> a) -> (Typ -> Typ -> a) -> (NTyp -> Typ -> a) -> Typ -> a 
 typRecurse f1 _ _ (TVar n)    = f1 n
 typRecurse _ f2 _ (s1 :-> s2) = f2 s1 s2
-typRecurse _ _ f3 (All x')    = x' @$ f3 
+typRecurse _ _ f3 (All x')    = x' @@! f3 
 
 
 ------------------------------------
@@ -198,10 +198,10 @@ instance KSub NTrm Trm Trm where
 -- | Calculate type of term, maybe
 typeOf :: Trm -> Maybe Typ 
 typeOf (Var n)     = let (_, t) = nameLabel n in Just t
-typeOf (TLam x')   = x' @$ \tp tm -> do -- Maybe monad
+typeOf (TLam x')   = x' @@! \tp tm -> do -- Maybe monad
    typetm <- typeOf tm 
    return $ All (abst tp typetm) 
-typeOf (Lam x')    = x' @$ \n  tm -> do -- Maybe monad
+typeOf (Lam x')    = x' @@! \n tm -> do -- Maybe monad
    typetm <- typeOf tm
    let (_, t) = nameLabel n
    return $ t :-> typetm 
@@ -211,7 +211,7 @@ typeOf (App s1 s2) = do -- Maybe monad
    toMaybe (t1a == t2) t1b 
 typeOf (TApp s t)  = do -- Maybe monad
    All x' <- typeOf s
-   Just $ subM x' t -- substitution of type name for type, in type 
+   Just $ subAt x' t -- substitution of type name for type, in type 
 
 -- | Calculate type of term; raise error if none exists
 typeOf' :: Trm -> Typ
@@ -232,8 +232,8 @@ nf s = case typeOf s of
    where -- behaviour on untypable terms is undefined
    nf_ :: Trm -> Trm
    nf_ = cong $ \case 
-            TApp (TLam x') t2 -> Just . nf_ $ subM x' t2
-            App  (Lam x')  s2 -> Just . nf_ $ subM x' (nf_ s2)
+            TApp (TLam x') t2 -> Just . nf_ $ subAt x' t2
+            App  (Lam x')  s2 -> Just . nf_ $ subAt x' (nf_ s2)
             _                 -> Nothing
 
 -- | Normal form; raise error if none
@@ -260,13 +260,13 @@ sem tyc tmc (Var n)      = Just $ tmc n       -- ^ Look up in the var context
 sem tyc tmc (App s1 s2)  = do -- Maybe monad
    SemLam t f <- sem tyc tmc s1 
    f <$> (sem tyc tmc s2)
-sem tyc tmc (Lam x)      = x @$ \n s -> do -- Maybe monad
+sem tyc tmc (Lam x)      = x @@! \n s -> do -- Maybe monad
    (_, nty) <- nameLabel n
    return $ SemLam nty (\x -> sem tyc (sub n x tmc) s)
 sem tyc tmc (TApp s1 t2) = do -- Maybe monad
    SemTLam f <- sem tyc tmc s1 
    return $ f t2
-sem tyc tmc (TLam x)     = x @$ \n s -> SemTLam (\x -> sem (sub n x tyc) tmc s)
+sem tyc tmc (TLam x)     = x @@! \n s -> SemTLam (\x -> sem (sub n x tyc) tmc s)
 
 -- A useful property would be that sem (t t') = sem t (sem t')
 --}
@@ -287,8 +287,8 @@ instance PP NTyp where
 -- | Pretty-print type 
 instance PP Typ where
   ppp (TVar n)  = ppp n
-  --- ppp (All x)   = x @$ \n t -> '\8704':(ppp n ++ "." ++ ppp t)
-  ppp (All x)   = x @$ \n t -> '∀':(ppp n ++ "." ++ ppp t)
+  --- ppp (All x)   = x @@! \n t -> '\8704':(ppp n ++ "." ++ ppp t)
+  ppp (All x)   = x @@! \n t -> '∀':(ppp n ++ "." ++ ppp t)
   ppp (t :-> u) = pppL t ++ " -> " ++ pppR u where
     pppL (All _)      = "(" ++ ppp t ++ ")"
     pppL (_ :-> _)    = "(" ++ ppp t ++ ")"
@@ -305,12 +305,12 @@ instance PP NTrm where
 -- lambda λ = \0955
 -- | Pretty-print term 
 instance PP Trm where
-   ppp (Lam x)      = x @$ \n t -> "λ" ++ pppN n ++ pppB t where
-      pppB (Lam x') = "," ++ x' @$ \n' t' -> " " ++ pppN n' ++ pppB t' 
+   ppp (Lam x)      = x @@! \n t -> "λ" ++ pppN n ++ pppB t where
+      pppB (Lam x') = "," ++ x' @@! \n' t' -> " " ++ pppN n' ++ pppB t' 
       pppB expr     = '.':ppp expr
       pppN n        = let (s, t) = nameLabel n in (s ++ ":" ++ ppp t)
-   ppp (TLam x)     = x @$ \n t -> "Λ" ++ ppp n ++ pppB t where
-      pppB (TLam x') = x' @$ \n' t' -> " " ++ ppp n' ++ pppB t'
+   ppp (TLam x)     = x @@! \n t -> "Λ" ++ ppp n ++ pppB t where
+      pppB (TLam x') = x' @@! \n' t' -> " " ++ ppp n' ++ pppB t'
       pppB expr     = '.':ppp expr
    ppp (Var s)      = ppp s
    ppp (App x y)    = pppL x ++ pppR y where
@@ -356,8 +356,8 @@ lam (s,ty) f = Lam $ absFresh (s, ty) (f . Var)
 s1 @. s2   = App s1 s2
 
 -- | Term-to-type application
-(@@.) :: Trm -> Typ -> Trm
-s1 @@. t2  = TApp s1 t2
+(@:) :: Trm -> Typ -> Trm
+s1 @: t2  = TApp s1 t2
 
 
 -- * Example terms
@@ -380,7 +380,7 @@ suc = lam ("n",nat) $ \n ->
       tlam "X" $ \xx -> 
       lam ("s", xx :-> xx) $ \s -> 
       lam ("z", xx) $ \z -> 
-         s @. (((n @@. xx) @. s) @. z)
+         s @. (((n @: xx) @. s) @. z)
 
 -- | 1
 one :: Trm
@@ -401,6 +401,6 @@ transform = tall "X" $ \xx -> xx :-> xx
 
 -- | Self-application = λx:∀X.X->X.x[∀X.X->X] x
 selfapp :: Trm
-selfapp = lam ("x", transform) $ \x -> (x @@. transform) @. x  
+selfapp = lam ("x", transform) $ \x -> (x @: transform) @. x  
 
 {- $tests Property-based tests are in "Language.Nominal.Properties.Examples.SystemFSpec". -}
