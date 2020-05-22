@@ -21,9 +21,11 @@ Nominal-flavoured implementation of data in a context of local names
            , InstanceSigs          
            , MultiParamTypeClasses 
            , PartialTypeSignatures   
+           , PatternSynonyms
            , PolyKinds             
            , ScopedTypeVariables  
            , TypeApplications 
+           , ViewPatterns
 #-}  
 
 module Language.Nominal.Nom
@@ -31,7 +33,7 @@ module Language.Nominal.Nom
      KNom, Nom, nomToIO,
      -- * The @'Binder'@ typeclass
      -- $binder
-     Binder (..), (@@!), (@@.), nomAt, nomAtC, genAt, genAtC, resAt, resAtC, resAtC',
+     Binder (..), (@@!), (@@.), pattern (:@@!), nomApp, nomAppC, genApp, genAppC, resApp, resAppC, resAppC',
      -- * Destroying a @'Nom'@
      unNom, genUnNom, nomTo, 
      -- * Creating fresh ids in a @'Nom'@
@@ -58,7 +60,6 @@ import           Data.Default
 import           Data.Functor 
 import           Data.Maybe
 import           Data.Set         as S (toList)
-import           Data.List.Extra  (disjoint)
 import           Flow 
 import           Type.Reflection  (Typeable)
 import           GHC.Generics
@@ -97,7 +98,7 @@ genUnNom = nomTo $ const id
 -- | Use this to safely exit a @'KNom'@ monad.  
 -- It works by binding the @KNom@-bound @s@-atoms using @a@'s native instance of @KRestrict@.  See "Language.Nominal.Examples.Tutorial" for examples. 
 --
--- > unNom = resAtC id
+-- > unNom = resAppC id
 unNom :: KRestrict s a => KNom s a -> a
 unNom = nomTo restrict
 
@@ -122,7 +123,7 @@ However, it is possible to design a binder without explicitly mentioning 'KNom' 
 
 * 'Language.Nominal.Abs.KAbs' is an instance.  For technical reasons its underlying representation uses functions, although a bijection does exist with a 'KNom'-based structure (see 'Language.Nominal.Abs.absToNom' and 'Language.Nominal.Abs.nomToAbs').
 
-What makes 'Binder' interesting is a rich array of destructors (e.g. '@@', '@@!', '@@.', 'nomAt', 'nomAtC', 'genAt', 'genAtC', 'resAt', 'resAtC', 'resAtC'').   
+What makes 'Binder' interesting is a rich array of destructors (e.g. '@@', '@@!', '@@.', 'nomApp', 'nomAppC', 'genApp', 'genAppC', 'resApp', 'resAppC', 'resAppC'').   
 These correspond to common patterns of unpacking a binder and mapping to other types, and provide a consistent interface across different binding constructs. 
 
 -}
@@ -131,7 +132,7 @@ These correspond to common patterns of unpacking a binder and mapping to other t
 --
 -- Provides a function to unpack a binder, giving access to its locally bound names.  Examples of binders include 'KNom', 'Language.Nominal.Abs.KAbs', and 'Language.Nominal.Examples.IdealisedEUTxO.Chunk'.
 --
--- A 'Binder' comes with a rich array of destructors, like '@@', '@@!', '@@.', 'nomAt', 'nomAtC', 'genAt', 'genAtC', 'resAt', 'resAtC', 'resAtC''. 
+-- A 'Binder' comes with a rich array of destructors, like '@@', '@@!', '@@.', 'nomApp', 'nomAppC', 'genApp', 'genAppC', 'resApp', 'resAppC', 'resAppC''. 
 -- These correspond to common patterns of unpacking a binder and mapping to other types. 
 --
 -- Below:
@@ -148,8 +149,8 @@ These correspond to common patterns of unpacking a binder and mapping to other t
 -- * mapped by a function of type @KName s t -> a -> b@ using '@@', 
 -- * to obtain something in @KNom s b@. 
 --
--- The other destructors ('@@!', '@@.', 'nomAt', 'nomAtC', 'genAt', 'genAtC', 'resAt', 'resAtC', 'resAtC'') are variations on this basic pattern which the wider development shows are empirically useful. 
-class Binder ctxbody ctx body s | ctxbody-> ctx, ctxbody -> body, ctxbody -> s  where
+-- The other destructors ('@@!', '@@.', 'nomApp', 'nomAppC', 'genApp', 'genAppC', 'resApp', 'resAppC', 'resAppC'') are variations on this basic pattern which the wider development shows are empirically useful. 
+class Binder ctxbody ctx body s | ctxbody -> ctx, ctxbody -> body, ctxbody -> s  where
    (@@) :: ctxbody           -- ^ the data in its local binding  
        -> (ctx -> body -> b) -- ^ function that inputs an explicit name context @ctx@ and a @body@ for that context, and outputs a @b@. 
        -> KNom s b           -- ^ Result is a @b@ in a binding context.
@@ -162,6 +163,9 @@ infixr 9 @@
 -- (@@!) x' f = genUnNom $ x' @@ f 
 
 infixr 9 @@! 
+
+pattern (:@@!) :: Binder ctxbody ctx body s => ctx -> body -> ctxbody
+pattern ctx :@@! body <- ((@@! \ctx' body' -> (ctx', body')) -> (ctx, body))
 
 -- | Acts on a 'KNom' binder by applying a function to the body and the context of locally bound names.  Local names are preserved. 
 instance Binder (KNom s a) [KAtom s] a s where
@@ -178,47 +182,47 @@ infixr 9 @@.
 
 -- | Unpacks a binder and maps into a @'KNom'@ environment.  
 --
--- 'nomAt' = 'flip' '(@@)'
-nomAt :: Binder ctxbody ctx body s => (ctx -> body -> b) -> ctxbody -> KNom s b
-nomAt = flip (@@)
+-- 'nomApp' = 'flip' '(@@)'
+nomApp :: Binder ctxbody ctx body s => (ctx -> body -> b) -> ctxbody -> KNom s b
+nomApp = flip (@@)
 -- | Unpacks a binder and maps into a @'KNom'@ environment.  
 -- Local bindings are not examined, and get carried over to the @'KNom'@.  
 -- 
--- 'nomAtC' = 'nomAt' . 'const'
-nomAtC :: Binder ctxbody ctx body s => (body -> b) -> ctxbody -> KNom s b
-nomAtC = nomAt . const 
+-- 'nomAppC' = 'nomApp' . 'const'
+nomAppC :: Binder ctxbody ctx body s => (body -> b) -> ctxbody -> KNom s b
+nomAppC = nomApp . const 
 -- | Unpacks a binder.  New names are generated and released. 
 --
--- 'genAt' = 'flip' '(@@!)'
-genAt :: Binder ctxbody ctx body s => (ctx -> body -> b) -> ctxbody -> b
-genAt = flip (@@!)
+-- 'genApp' = 'flip' '(@@!)'
+genApp :: Binder ctxbody ctx body s => (ctx -> body -> b) -> ctxbody -> b
+genApp = flip (@@!)
 -- | Unpacks a binder.  New names are generated and released.
 -- Local bindings are not examined. 
 --
--- 'genAtC' = 'genAt' . 'const'
-genAtC :: Binder ctxbody ctx body s => (body -> b) -> ctxbody -> b
-genAtC = genAt . const
+-- 'genAppC' = 'genApp' . 'const'
+genAppC :: Binder ctxbody ctx body s => (body -> b) -> ctxbody -> b
+genAppC = genApp . const
 -- | Unpacks a binder and maps to a type with its own @'restrict'@ operation.  
 --
--- 'resAt' = 'flip' '(@@.)'
-resAt :: (Binder ctxbody ctx body s, KRestrict s b) => (ctx -> body -> b) -> ctxbody -> b
-resAt = flip (@@.)
+-- 'resApp' = 'flip' '(@@.)'
+resApp :: (Binder ctxbody ctx body s, KRestrict s b) => (ctx -> body -> b) -> ctxbody -> b
+resApp = flip (@@.)
 
 -- | Unpacks a binder and maps to a type with its own @'restrict'@ operation.  
 -- Local bindings are not examined, and get carried over and @'restrict'@ed in the target type.
 --
--- A common type instance is @(a -> Bool) -> KNom s a -> Bool@, in which case 'resAtC' acts to capture-avoidingly apply a predicate under a binder, and return the relevant truth-value.  See for example the code for 'transposeNomMaybe'. 
+-- A common type instance is @(a -> Bool) -> KNom s a -> Bool@, in which case 'resAppC' acts to capture-avoidingly apply a predicate under a binder, and return the relevant truth-value.  See for example the code for 'transposeNomMaybe'. 
 --
--- 'resAtC' = 'resAt' . 'const'
-resAtC :: (Binder ctxbody ctx body s, KRestrict s b) => (body -> b) -> ctxbody -> b
-resAtC = resAt . const
+-- 'resAppC' = 'resApp' . 'const'
+resAppC :: (Binder ctxbody ctx body s, KRestrict s b) => (body -> b) -> ctxbody -> b
+resAppC = resApp . const
 -- | Unpacks a binder and maps to a type with its own @'restrict'@ operation.  'Flip'ped version, for convenience. 
 --
--- A common type instance is @KNom s a -> (a -> Bool) -> Bool @, in which case 'resAtC'' acts to apply a predicate inside a binder and return the relevant truth-value.  See for example the code for 'transposeNomMaybe'. 
+-- A common type instance is @KNom s a -> (a -> Bool) -> Bool @, in which case 'resAppC'' acts to apply a predicate inside a binder and return the relevant truth-value.  See for example the code for 'transposeNomMaybe'. 
 --
--- 'resAtC'' = 'flip' 'resAt' 
-resAtC' :: (Binder ctxbody ctx body s, KRestrict s b) => ctxbody -> (body -> b) -> b
-resAtC' = flip resAtC 
+-- 'resAppC'' = 'flip' 'resApp' 
+resAppC' :: (Binder ctxbody ctx body s, KRestrict s b) => ctxbody -> (body -> b) -> b
+resAppC' = flip resAppC 
 
 -- * 'Nom' the monad
 
@@ -330,7 +334,7 @@ instance (Typeable (s :: k), KSwappable k a) => KRestrict s (KNom s a) where
 
 -- | @supp (res ns x) == supp x \\ ns@
 instance (Typeable s, KSupport s a) => KSupport s (KNom s a) where
-    ksupp = resAtC . ksupp  -- supp returns a set.  Restriction on a set of atoms coincides with \\ (sets subtraction) 
+    ksupp = resAppC . ksupp  -- supp returns a set.  Restriction on a set of atoms coincides with \\ (sets subtraction) 
 
 
 
@@ -339,7 +343,7 @@ instance (Typeable s, KSupport s a) => KSupport s (KNom s a) where
 -- | Maybe Nom -> Nom Maybe is a fact
 transposeNomMaybe :: (Typeable (s :: k), KSwappable k a) => KNom s (Maybe a) -> Maybe (KNom s a)
 transposeNomMaybe p = 
-   toMaybe (resAtC isJust p)            -- If p has the form res atms Just x 
+   toMaybe (resAppC isJust p)            -- If p has the form res atms Just x 
            (p >>= (fromJust .> return))  -- then res atms Just x --> Just res atms x
 
 -- | Nom Maybe -> Maybe Nom follows by general principles since Maybe is traversable and Nom is applicative (being a Functor), and Traversable has sequenceA 
@@ -362,11 +366,11 @@ instance (Typeable s, Eq a) => Eq (KNom s a) where
 
 -- | Evaluate predicate on fresh atom. 
 newA :: KRestrict s b => (KAtom s -> b) -> b 
-newA = resAtC' freshKAtom 
+newA = resAppC' freshKAtom 
 
 -- | Evaluate predicate on fresh name with label @t@.
 new :: KRestrict s b => t -> (KName s t -> b) -> b 
-new = resAtC' . freshKName 
+new = resAppC' . freshKName 
 -- new t = nomPred' (freshKName t)
 -- new t = unNom . atFresh t
 
@@ -400,8 +404,8 @@ freshen = kfreshen atTom
 -- This is the @'KSupport'@ version, for highly structured data that we can traverse (think: lists, tuples, sums, and maps). 
 --
 -- See also @'isTrivialNomByEq'@, for less structured data when we have equality @'Eq'@ and swapping 'KSwappable'. 
-isTrivialNomBySupp :: (Typeable (s :: k), KSupport s a) => KNom s a -> Bool
-isTrivialNomBySupp = resAt $ \atms a -> atms `disjoint` S.toList (ksupp Proxy a) 
+isTrivialNomBySupp :: forall k s a. (Typeable (s :: k), KSupport s a) => KNom s a -> Bool
+isTrivialNomBySupp = resApp $ kapart (Proxy :: Proxy s) 
 
 -- | Is the @'Nom'@ binding trivial?  
 --
@@ -410,7 +414,7 @@ isTrivialNomBySupp = resAt $ \atms a -> atms `disjoint` S.toList (ksupp Proxy a)
 --
 -- See also @'isTrivialNomBySupp'@, for when we have @'KSupport'@.
 isTrivialNomByEq :: (Typeable (s :: k), KSwappable k a, Eq a) => KNom s a -> Bool
-isTrivialNomByEq = resAt $ \atms a -> and $ (`freshFor` a) <$> (justAnAtom <$> atms) 
+isTrivialNomByEq = resApp $ \atms a -> and $ (`freshFor` a) <$> (justAnAtom <$> atms) 
 
 
 {- $tests Property-based tests are in "Language.Nominal.Properties.NomSpec". -}

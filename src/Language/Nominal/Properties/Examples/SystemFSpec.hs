@@ -56,38 +56,38 @@ prop_sub_perm_termvar = iprop_sub_perm Var
 -- * Typing and reduction
 
 -- | (id id) has no type (it needs a type argument)
-prop_untypable :: Bool 
-prop_untypable = isNothing $ typeOf (App idTrm idTrm) 
+prop_untypeable :: Bool 
+prop_untypeable = isNothing $ typeOf (App idTrm idTrm) 
 
--- | Not all terms are typable
-prop_all_typable :: Trm -> Property 
-prop_all_typable t = expectFailure $ typable t 
+-- | Not all terms are typeable
+prop_all_typeable :: Trm -> Property 
+prop_all_typeable t = expectFailure $ typeable t 
 
 
-prop_typable_nf :: Trm -> Property
-prop_typable_nf t = typable t ==> normalisable t
+prop_typeable_nf :: Trm -> Property
+prop_typeable_nf t = typeable t ==> normalisable t
 
-prop_nf_typable :: Trm -> Property
-prop_nf_typable t = normalisable t ==> typable t
+prop_nf_typeable :: Trm -> Property
+prop_nf_typeable t = normalisable t ==> typeable t
 
 -- | Type soundness
--- If a term is typable and normalisable then its normal form has the same type as it does. 
+-- If a term is typeable and normalisable then its normal form has the same type as it does. 
 prop_type_soundness :: Trm -> Property 
-prop_type_soundness t = typable t ==> normalisable t ==> (typeOf t === (typeOf =<< nf t))
+prop_type_soundness t = typeable t ==> normalisable t ==> (typeOf t === (typeOf =<< nf t))
 
 -- | typeof(id t) = typeof(t)
 prop_id_type_unchanged :: Trm -> Property 
-prop_id_type_unchanged t = typable t ==> typeOf t === typeOf (App (TApp idTrm (typeOf' t)) t)
+prop_id_type_unchanged t = typeable t ==> typeOf t === typeOf (App (TApp idTrm (typeOf' t)) t)
 
 -- | If x : t then (id t x) --> x
 prop_app_id :: Trm -> Property 
-prop_app_id t = typable t ==> nf' t === nf' (App (TApp idTrm (typeOf' t)) t)
+prop_app_id t = typeable t ==> nf' t === nf' (App (TApp idTrm (typeOf' t)) t)
 
-{-- prop_typable_sub :: Name NTrmLabel -> Trm -> Trm -> Property
-prop_typable_sub n t1 t2 = typable t1 ==> typable t2 ==> typable $ sub n t1 t2 --}
+{-- prop_typeable_sub :: Name NTrmLabel -> Trm -> Trm -> Property
+prop_typeable_sub n t1 t2 = typeable t1 ==> typeable t2 ==> typeable $ sub n t1 t2 --}
 
-{-- prop_typable_sub' :: Name NTrmLabel -> Trm -> Trm -> Property
-prop_typable_sub' n t1 t2 = typable t1 ==> typable t2 ==> ((typeOf' t2) === (typeOf' (sub n' t1 t2))) where 
+{-- prop_typeable_sub' :: Name NTrmLabel -> Trm -> Trm -> Property
+prop_typeable_sub' n t1 t2 = typeable t1 ==> typeable t2 ==> ((typeOf' t2) === (typeOf' (sub n' t1 t2))) where 
    n' = nameOverwriteLabel (Just ("",typeOf' t1)) n --}
 
 -- * Church numerals

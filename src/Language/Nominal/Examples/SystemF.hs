@@ -41,7 +41,7 @@ module Language.Nominal.Examples.SystemF
 -- * System F types 
     NTypLabel, NTyp, Typ (..), typRecurse,
 -- * System F terms
-    NTrmLabel, NTrm, Trm (..), typeOf, typeOf', typable,  
+    NTrmLabel, NTrm, Trm (..), typeOf, typeOf', typeable,  
 -- * Normal forms
     nf, nf', normalisable,
 -- * Pretty-printer
@@ -57,6 +57,7 @@ module Language.Nominal.Examples.SystemF
 
 import Data.Maybe
 import GHC.Generics
+import Control.Monad (guard)
 
 import Language.Nominal.Utilities 
 import Language.Nominal.Name 
@@ -87,8 +88,8 @@ We start with atoms:
 -- * @ATrm@ a sort of atoms to identify term variables @'NTrm'@.
 --
 -- See 'Language.Nominal.Name.Tom' for more discussion of how this works.
-data AKind = ATyp -- Atoms for type variable names 'NTyp' 
-           | ATrm -- Atoms for term variable names 'NTrm'
+data AKind = ATyp -- ^ Atoms for type variable names 'NTyp' 
+           | ATrm -- ^ Atoms for term variable names 'NTrm'
 
 
 -- * System F types 
@@ -198,42 +199,41 @@ instance KSub NTrm Trm Trm where
 -- | Calculate type of term, maybe
 typeOf :: Trm -> Maybe Typ 
 typeOf (Var n)     = let (_, t) = nameLabel n in Just t
-typeOf (TLam x')   = x' @@! \tp tm -> do -- Maybe monad
+typeOf (TLam (tp :@> tm)) = do -- Maybe monad
    typetm <- typeOf tm 
    return $ All (abst tp typetm) 
-typeOf (Lam x')    = x' @@! \n tm -> do -- Maybe monad
+typeOf (Lam (n :@> tm)) = do -- Maybe monad
    typetm <- typeOf tm
    let (_, t) = nameLabel n
    return $ t :-> typetm 
 typeOf (App s1 s2) = do -- Maybe monad 
    t1a :-> t1b    <- typeOf s1
    t2             <- typeOf s2 
-   toMaybe (t1a == t2) t1b 
+   guard (t1a == t2) 
+   return t1b 
 typeOf (TApp s t)  = do -- Maybe monad
    All x' <- typeOf s
-   Just $ subAt x' t -- substitution of type name for type, in type 
+   return $ subApp x' t -- substitution of type name for type, in type 
 
 -- | Calculate type of term; raise error if none exists
 typeOf' :: Trm -> Typ
 typeOf' s = fromMaybe (error ("Type error" ++ ppp s)) (typeOf s) 
 
--- | @'True'@ if term is typable; @'False'@ if not. 
-typable :: Trm -> Bool
-typable = isJust . typeOf 
+-- | @'True'@ if term is typeable; @'False'@ if not. 
+typeable :: Trm -> Bool
+typeable = isJust . typeOf 
 
 
 -- * Normal forms
 
 -- | Normal form, maybe 
 nf :: Trm -> Maybe Trm  
-nf s = case typeOf s of
-   Just _  -> Just (repeatedly nf_ s)
-   Nothing -> Nothing 
-   where -- behaviour on untypable terms is undefined
+nf s = guard (typeable s) >> return (repeatedly nf_ s)
+   where -- behaviour on untypeable terms is undefined
    nf_ :: Trm -> Trm
    nf_ = cong $ \case 
-            TApp (TLam x') t2 -> Just . nf_ $ subAt x' t2
-            App  (Lam x')  s2 -> Just . nf_ $ subAt x' (nf_ s2)
+            TApp (TLam x') t2 -> return . nf_ $ subApp x' t2
+            App  (Lam x')  s2 -> return . nf_ $ subApp x' (nf_ s2)
             _                 -> Nothing
 
 -- | Normal form; raise error if none
@@ -287,8 +287,7 @@ instance PP NTyp where
 -- | Pretty-print type 
 instance PP Typ where
   ppp (TVar n)  = ppp n
-  --- ppp (All x)   = x @@! \n t -> '\8704':(ppp n ++ "." ++ ppp t)
-  ppp (All x)   = x @@! \n t -> '∀':(ppp n ++ "." ++ ppp t)
+  ppp (All (n :@> t)) = '∀':(ppp n ++ "." ++ ppp t)
   ppp (t :-> u) = pppL t ++ " -> " ++ pppR u where
     pppL (All _)      = "(" ++ ppp t ++ ")"
     pppL (_ :-> _)    = "(" ++ ppp t ++ ")"
@@ -305,12 +304,12 @@ instance PP NTrm where
 -- lambda λ = \0955
 -- | Pretty-print term 
 instance PP Trm where
-   ppp (Lam x)      = x @@! \n t -> "λ" ++ pppN n ++ pppB t where
-      pppB (Lam x') = "," ++ x' @@! \n' t' -> " " ++ pppN n' ++ pppB t' 
+   ppp (Lam (n :@> t))      = "λ" ++ pppN n ++ pppB t where
+      pppB (Lam (n' :@> t')) = "," ++ " " ++ pppN n' ++ pppB t' 
       pppB expr     = '.':ppp expr
-      pppN n        = let (s, t) = nameLabel n in (s ++ ":" ++ ppp t)
-   ppp (TLam x)     = x @@! \n t -> "Λ" ++ ppp n ++ pppB t where
-      pppB (TLam x') = x' @@! \n' t' -> " " ++ ppp n' ++ pppB t'
+      pppN n'       = let (s', t') = nameLabel n' in (s' ++ ":" ++ ppp t')
+   ppp (TLam (n :@> t))     = "Λ" ++ ppp n ++ pppB t where
+      pppB (TLam (n' :@> t')) = " " ++ ppp n' ++ pppB t'
       pppB expr     = '.':ppp expr
    ppp (Var s)      = ppp s
    ppp (App x y)    = pppL x ++ pppR y where

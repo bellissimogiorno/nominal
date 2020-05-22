@@ -11,7 +11,7 @@ import Language.Nominal.Properties.Examples.SystemFSpec
 
 spec :: Spec
 spec = do
-    it "(id id) has no type (it needs a type argument)" $ property prop_untypable
+    it "(id id) has no type (it needs a type argument)" $ property prop_untypeable
     describe "y[n-> var n] = y" $ do
         it "typevar'" $ property prop_sub_id_typevar'
         it "termvar" $ property prop_sub_id_termvar
@@ -24,11 +24,11 @@ spec = do
         it "typevar'" $ property prop_sub_perm_typevar'
         it "typevar''" $ property prop_sub_perm_typevar''
         it "termvar" $ property prop_sub_perm_termvar
-    it "normal forms are typable" $ property prop_typable_nf
-    it "typable terms are normalisable" $ property prop_nf_typable
-    it "Type soundness: if a term is typable and normalisable then its normal form has the same type as it does." $
+    it "normal forms are typeable" $ property prop_typeable_nf
+    it "typeable terms are normalisable" $ property prop_nf_typeable
+    it "Type soundness: if a term is typeable and normalisable then its normal form has the same type as it does." $
         property prop_type_soundness
-    it "Not all terms are typable" $ property prop_all_typable
+    it "Not all terms are typeable" $ property prop_all_typeable
     it "typeof(id t) = typeof(t)" $ property prop_id_type_unchanged
     it "If x : t then (id t x) --> x" $ property prop_app_id
     it "0 : nat" $ property prop_typeof_zero

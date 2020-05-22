@@ -235,7 +235,7 @@ instance HasOutputPositions (Transaction r d v) where
    outputPositions (Transaction _ os) = outputPositions os 
 
 instance HasOutputPositions a => HasOutputPositions (Nom a) where
-   outputPositions = resAtC outputPositions 
+   outputPositions = resAppC outputPositions 
 
 -- * Unspent (dangling) elements: UTxO, UTxI, UTxC
 {- $unspent
@@ -262,29 +262,26 @@ txPoint (Transaction is os) p = Transaction (atomPoint p is) os
 -- | Form the contexts of a 'Transaction'.
 contextsOfTx :: Support r => Transaction r d v -> [Context r d v]
 contextsOfTx tx = txPoint tx <$> inputPositions tx
--- contextsOfTx (Transaction is os) = (\p -> Transaction (atomPoint p is) os) <$> inputPositions is
-
-
 
 -- | Calculate __unspent outputs__.
 -- 
 -- We tell an output is unspent when its position isn't bound in the enclosing 'Nom' name-context.
 utxosOfChunk :: (Support r, Support d, Support v) => Chunk r d v -> [Output d v]
-utxosOfChunk = resAtC $ concatMap outputsOfTx 
+utxosOfChunk = resAppC $ concatMap outputsOfTx 
 -- utxosOfChunk ch = ch @@. \_ txs -> concatMap outputsOfTx txs
 -- utxosOfChunk (Chunk x') =
---   resAtC' x' (concatMap outputsOfTx) -- accumulate outputs listwise.  The 'restrict' implicit in the use of 'resAtC'' filters out outputs that mention bound names.
+--   resAppC' x' (concatMap outputsOfTx) -- accumulate outputs listwise.  The 'restrict' implicit in the use of 'resAppC'' filters out outputs that mention bound names.
 
 -- | Calculate __unspent inputs__. 
 --
 -- Because we're dealing with transaction lists, we care about dangling /inputs/ (which we call UTxIs) as well as UTxOs.
 utxisOfChunk :: (Support r, Support d, Support v) => Chunk r d v -> [Input r]
-utxisOfChunk = resAtC $ concatMap inputsOfTx -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAtC' filters out outputs that mention bound names.
--- utxisOfChunk ch = ch @@. \_ txs -> concatMap inputsOfTx txs -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAtC'' filters out outputs that mention bound names.
+utxisOfChunk = resAppC $ concatMap inputsOfTx -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAppC' filters out outputs that mention bound names.
+-- utxisOfChunk ch = ch @@. \_ txs -> concatMap inputsOfTx txs -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAppC'' filters out outputs that mention bound names.
 -- utxisOfChunk (Chunk x') = 
---   resAtC' x' (concatMap inputsOfTx) -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAtC'' filters out outputs that mention bound names.
+--   resAppC' x' (concatMap inputsOfTx) -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAppC'' filters out outputs that mention bound names.
 -- utxisOfChunk (Chunk x') = 
---   resAtC' x' (concatMap inputsOfTx) -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAtC'' filters out outputs that mention bound names.
+--   resAppC' x' (concatMap inputsOfTx) -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAppC'' filters out outputs that mention bound names.
 
 -- | What's the point of my context?   The position @p@ of the first element of the input list of a context is deemed to be the "call site" from which the context tries to find a preceding output (with position @p@) in its @'Chunk'@. 
 contextPos :: Context r d v -> Position
@@ -294,7 +291,7 @@ contextPos (Transaction (Input p _ :| _) _) = p
 --
 -- Because we're dealing with transaction lists, we care about dangling /contexts/ (which we call UTxCs). 
 utxcsOfChunk :: forall r d v. (Support r, Support d, Support v) => Chunk r d v -> Nom [Context r d v] -- the top-level Nom binding here stores the bound names of the chunk, i.e. those participating in an Input-Output binding within the chunk.
-utxcsOfChunk = nomAt $ \ps txs ->  
+utxcsOfChunk = nomApp $ \ps txs ->  
     L.filter (\c -> contextPos c `notElem` ps) (concatMap contextsOfTx txs)
 
 
@@ -573,7 +570,7 @@ instance (Swappable r, Swappable d, Swappable v) => KRestrict 'Tom (Chunk r d v)
 --
 -- Works by unpacking first chunk as a list of transactions and appending them to 'Just' the second argument.  Local binding of first chunk gets carried over automatically; new local bindings may get generated during the append.
 concatChunk :: Validator r d v => Chunk r d v -> Chunk r d v -> Maybe (Chunk r d v)
-concatChunk ch1 ch2 = resAtC (foldr appendTxMaybeChunk (Just ch2)) ch1 
+concatChunk ch1 ch2 = resAppC (foldr appendTxMaybeChunk (Just ch2)) ch1 
 
 
 -- | A version of 'concatChunk' that performs explicit validity checks on its inputs and result. 
@@ -612,7 +609,7 @@ instance Validator r d v => Monoid (Maybe (Chunk r d v)) where
 
 -- | For debugging
 genUnNomChunk :: Chunk r d v -> Chunk r d v
-genUnNomChunk = genAtC $ Chunk . return 
+genUnNomChunk = genAppC $ Chunk . return 
 
 -- | Check whether one chunk is a prefix of another.  See @'chunkTail'@ to understand why the @'Nom'@ binding on the first argument is required.
 isPrefixChunk :: (UnifyPerm r, UnifyPerm d, UnifyPerm v, Swappable r, Swappable d, Swappable v) => Nom (Chunk r d v) -> Chunk r d v -> Bool  -- Need @Swappable@ instances for @'@@.'@ 
@@ -627,12 +624,12 @@ isPrefixChunk ch1' ch2 =
 
 -- | Calculate the length of a Chunk
 chunkLength :: (Swappable r, Swappable d, Swappable v) => Chunk r d v -> Int 
-chunkLength = resAtC L.length 
+chunkLength = resAppC L.length 
 
 
 -- | Calculate the head of a chunk.  
 chunkHead :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Nom (Transaction r d v))
-chunkHead ch = transposeNomMaybe $ nomAtC safeHead ch 
+chunkHead ch = transposeNomMaybe $ nomAppC safeHead ch 
 
 
 -- | Calculate the tail of a chunk.  Two monads here:
@@ -641,8 +638,8 @@ chunkHead ch = transposeNomMaybe $ nomAtC safeHead ch
 --
 -- * @'Nom'@ ... to bind the names of any positions in newly-exposed UTxOs.
 chunkTail :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Nom (Chunk r d v))
-chunkTail ch = transposeNomMaybe $ nomAtC ((=<<) txListToChunk . safeTail) ch 
--- chunkTail ch = transposeNomMaybe $ nomAtC (\txs -> safeTail txs >>= txListToChunk) ch 
+chunkTail ch = transposeNomMaybe $ nomAppC ((=<<) txListToChunk . safeTail) ch 
+-- chunkTail ch = transposeNomMaybe $ nomAppC (\txs -> safeTail txs >>= txListToChunk) ch 
 -- chunkTail ch = transposeNomMaybe $ ch @@ const ((txListToChunk =<<) . safeTail)
 
 
@@ -653,7 +650,7 @@ chunkTail ch = transposeNomMaybe $ nomAtC ((=<<) txListToChunk . safeTail) ch
 --
 -- See the test 'Language.Nominal.Properties.Examples.IdealisedEUTxOSpec.prop_warningNotChunkTail_is_not_chunk'.
 warningNotChunkTail :: (UnifyPerm r, UnifyPerm d, Swappable r, Swappable d, Swappable v) => Chunk r d v -> Maybe (Chunk r d v)
-warningNotChunkTail = genAtC $ \txs -> (Chunk . return) <$> safeTail txs 
+warningNotChunkTail = genAppC $ \txs -> (Chunk . return) <$> safeTail txs 
 {-- warningNotChunkTail ch = ch @@. \_ txs -> case txs of
     []         -> Nothing
     (_ : txs') -> Just $ Chunk $ return txs'  --}
@@ -666,13 +663,13 @@ chunkTakeEnd i ch = fromJust . nomTxListToNomChunk $ takeEnd i <$> chunkToTxList
 
 -- | List of subchunks.  @'Nom'@ binding is to capture dangling UTxOs or UTxIs.
 subTxListOf :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Nom [[Transaction r d v]] 
-subTxListOf = nomAtC subsequences 
+subTxListOf = nomAppC subsequences 
 
 
 -- | Take a chunk and reverse its transactions.  Usually this will result in an invalid chunk, in which case we get @Nothing@.  
 -- Used for testing. 
 reverseTxsOf :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Chunk r d v) 
-reverseTxsOf = nomTxListToChunk . nomAtC L.reverse -- TODO: could improve further by losing nom? 
+reverseTxsOf = nomTxListToChunk . nomAppC L.reverse -- TODO: could improve further by losing nom? 
 -- reverseTxsOf ch = nomTxListToChunk $ ch @@ const L.reverse 
 
 -- | Split a chunk into a head and a tail.
@@ -710,19 +707,19 @@ blockchain c
 
 -- | Check that the correct atoms are bound in a 'Chunk'.
 chunkBindingOK ::  Validator r d v => Chunk r d v -> Bool 
-chunkBindingOK = resAt $ \ps txs -> let (ips, ops) = positionsOfTxs txs in 
+chunkBindingOK = resApp $ \ps txs -> let (ips, ops) = positionsOfTxs txs in 
    ps `intersect` (ips ++ ops) == ips `intersect` ops 
 
 -- | Check that validators are happy, by taking a 'Chunk' apart and putting it together again.
 chunkValidatorsOK :: Validator r d v => Chunk r d v -> Bool 
-chunkValidatorsOK = resAtC $ isJust . txListToChunk   -- take it apart and put it together with transaction validation 
+chunkValidatorsOK = resAppC $ isJust . txListToChunk   -- take it apart and put it together with transaction validation 
 
 -- | Is this a valid chunk?  ('exampleCh1', 'exampleCh2', 'exampleCh12', 'exampleCh21') 
 --
--- >>> resAtC isChunk exampleCh1
+-- >>> resAppC isChunk exampleCh1
 -- True 
 --
--- >>> resAtC isChunk exampleCh2
+-- >>> resAppC isChunk exampleCh2
 -- True 
 --
 -- >>> isChunk exampleCh12
@@ -736,17 +733,17 @@ isChunk ch = chunkBindingOK ch && chunkValidatorsOK ch
 -- | Is this a valid chunk?  Test by splitting it into a transaction list and putting it back together again. 
 --
 isChunk' :: (Validator r d v, UnifyPerm r, UnifyPerm d, UnifyPerm v) => Chunk r d v -> Bool 
-isChunk' ch = Just ch == genAtC txListToChunk (chunkToTxList ch) 
+isChunk' ch = Just ch == genAppC txListToChunk (chunkToTxList ch) 
 
 -- | A blockchain is a valid 'Chunk' with no UTxI (unspent transaction /inputs/).  ('exampleCh1', 'exampleCh2', 'exampleCh12', 'exampleCh21') 
 --
 -- >>> isBlockchain exampleCh0
 -- True
 --
--- >>> resAtC isBlockchain exampleCh1
+-- >>> resAppC isBlockchain exampleCh1
 -- True
 --
--- >>> resAtC isBlockchain exampleCh2
+-- >>> resAppC isBlockchain exampleCh2
 -- False 
 --
 -- >>> isBlockchain exampleCh12

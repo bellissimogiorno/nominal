@@ -151,7 +151,7 @@ fixChunkToBlockchain chunk
        -- get the utxcs of the chunk, still in a Nom binding
        let utxcsCh' = utxcsOfChunk chunk
        -- generate an arbitrary output for each utxc /first/ 
-       os' <- replicateM (resAtC length utxcsCh') arbitrary -- :: Gen (Output d v) 
+       os' <- replicateM (resAppC length utxcsCh') arbitrary -- :: Gen (Output d v) 
        -- and only /then/ unpack the list of utxcs.  Fresh atoms generated are for input-output bindings and should not interfere with atoms in os' 
        let cs = genUnNom $ utxcsCh' 
        -- fix each output so it matches the relevant utxc.

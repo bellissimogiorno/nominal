@@ -40,8 +40,8 @@ module Language.Nominal.Unify
     , Ren 
     , idRen
     , nothingRen
-    , isNothingRen 
     , isJustRen 
+    , isNothingRen 
       -- Manipulating renamings
     , renNub 
     , renExtend
@@ -99,7 +99,7 @@ import           Language.Nominal.NameSet
 --
 -- /does there exist a permutation that makes @x@ equal to @y@?/
 --
--- A type in the @'KRen'@ typeclass is by its structure guaranteed to give /at most one/ solution to such a unification problem (up to renaming irrelevant atoms).  
+-- A type in the @'KUnifyPerm'@ typeclass is structurally guaranteed to give /at most one/ solution to such a unification problem, up to renaming irrelevant atoms. 
 -- So in a nutshell: names, lists, and tuples are good here, and functions (not an equality type) and sets (may have multiple solutions) are not good.
 --
 --  A 'Just' value represents a solution to this unification problem; a 'Nothing' value represents that no such solution can be found.  @'unifyPerm'@ calculates these solutions. 
@@ -206,6 +206,11 @@ instance Typeable s => KRestrict s (KRen s) where
 -- * Unification up to a @'KRen'@
 
 -- | Equal-up-to-permutation.  The algorithm works very simply by traversing the element looking for atoms and when it finds them, trying to match them up.  If it can do so injectively then it succeeds with @'Just'@ a renaming; if it fails it returns @'Nothing'@. 
+--
+-- /Question: Granted that 'KUnifyPerm' is a subset of 'KSupport', why are they not equal?/
+-- Because for simplicity we only consider types for which at most one unifier can be found, by an efficient structural traversal.
+-- This avoids backtracking, and makes a 'kunifyPerm' a function to 'KRen'.
+-- So, a key difference is that 'KSupport' can easily calculate the support of a set (unordered list without multiplicities) whereas 'KUnifyPerm' does not even attempt to calculate unifiers of sets; not because this would be impossible, but because it would require a significant leap in complexity that we do not seem to need (so far).
 class KSupport s a => KUnifyPerm s a where
     
     -- | This calculates a solution to a unification problem
@@ -287,8 +292,8 @@ instance (Typeable (s :: k), Typeable (u :: k), KUnifyPerm s t) => KUnifyPerm s 
 -- | Unify 'Nom' abstractions.
 -- Unpack, unify, clean out fresh names
 instance (Typeable s, KUnifyPerm s a) => KUnifyPerm s (KNom s a) where
-   -- kunifyPerm p noma nomb = resAtC (\a -> resAtC (kunifyPerm p a) nomb) noma  
-   kunifyPerm p noma nomb = resAtC' noma $ \a -> resAtC' nomb $ \b -> kunifyPerm p a b
+   -- kunifyPerm p noma nomb = resAppC (\a -> resAppC (kunifyPerm p a) nomb) noma  
+   kunifyPerm p noma nomb = resAppC' noma $ \a -> resAppC' nomb $ \b -> kunifyPerm p a b
    ren r m = ren r <$> m
 
 
@@ -355,3 +360,4 @@ instance GUnifyPerm s f => GUnifyPerm s (M1 i t f) where
     gren r (M1 x) = M1 $ gren r x
 
 {- $tests Property-based tests are in "Language.Nominal.Properties.UnifySpec". -}
+

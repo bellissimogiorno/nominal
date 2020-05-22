@@ -65,9 +65,12 @@ import           Language.Nominal.Utilities
 
 -- * Support
 
--- | A typeclass for elements for which a supporting set of atoms can be computed in a structural, type-directed manner.  
+-- | A typeclass for elements for which a supporting set of atoms can be computed in an efficient, structural, type-directed manner.  
 --
--- So: /lists/ yes and /function-types/ no.  See instances for full details. 
+-- So: /lists/, /sets/, and /name-abstractions/ yes, and /function-types/ no.  
+-- See instances for full details. 
+--
+-- /Note: This gives 'KSupport' a strictly more specific and structure-directed meaning than the motivating mathematical notion of support, which __does__ work e.g. on function-types./
 --
 class (Typeable s, KSwappable k a) => KSupport (s :: k) a where   
     ksupp :: proxy s -> a -> Set (KAtom s)
@@ -112,7 +115,7 @@ instance (KSupport s a, KSupport s b) => KSupport s (Either a b)
 --
 -- /We use @proxy@ instead of 'Proxy' below, so the user can supply any type that mentions @s@./ 
 kapart :: (KSupport s a, KSupport s b) => proxy s -> a -> b -> Bool  
-kapart p a b = S.disjoint (ksupp p a) (ksupp p b)
+kapart p a b = (ksupp p a) `S.disjoint` (ksupp p b)
 
 -- | @a@ and @b@ are 'apart' when they are supported by disjoint sets of atoms.
 apart :: (Support a, Support b) => a -> b -> Bool

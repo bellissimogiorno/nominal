@@ -43,8 +43,7 @@ class Cong a where
 
 -- | Apply f repeatedly until we reach a fixedpoint
 repeatedly :: Eq a => (a -> a) -> a -> a
-repeatedly f x = if f x == x then x else repeatedly f (f x)
-
+repeatedly f x = let fx = f x in if fx == x then x else repeatedly f fx
 
 -- | Apply a list of functions in succession.
 chain :: [a -> a] -> a -> a

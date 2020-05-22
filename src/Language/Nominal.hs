@@ -48,9 +48,12 @@ import Language.Nominal.Unify
 
 == Worked examples 
 
-* "Language.Nominal.Examples.Tutorial" 
-* "Language.Nominal.Examples.SystemF": System F syntax and reductions using nominal abstract syntax.
-* "Language.Nominal.Examples.IdealisedEUTxO": A EUTxO-style blockchain system, following the ideas in <https://arxiv.org/abs/2003.14271 mathematical idealisation of the Extended UTxO model>. 
+* "Language.Nominal.Examples.Tutorial": We explore some basic concepts. 
+* "Language.Nominal.Examples.UntypedLambda": Untyped lambda-calculus syntax and reductions (short example). 
+* "Language.Nominal.Examples.Assembly1": A simple assembly language, with binding (short example). 
+* "Language.Nominal.Examples.Assembly2": A simple assembly language, with binding and a swap-variable primitive (short example). 
+* "Language.Nominal.Examples.SystemF": System F syntax and reductions (longer example). 
+* "Language.Nominal.Examples.IdealisedEUTxO": A EUTxO-style blockchain system, following the ideas in <https://arxiv.org/abs/2003.14271 mathematical idealisation of the Extended UTxO model> (longer example). 
 
 == Links and references
 
@@ -59,6 +62,7 @@ import Language.Nominal.Unify
 * The paper on <https://arxiv.org/abs/1009.2791v1 closed nominal rewriting> (<http://www.gabbay.org.uk/papers.html#clonre author's pdfs>) is pertinent to the design of "Language.Nominal.Unify".
 * The paper on the <https://arxiv.org/abs/2003.14271 mathematical idealisation of the Extended UTxO model> is pertinent "Language.Nominal.Examples.IdealisedEUTxO".
 * This draft book on <https://www.mimuw.edu.pl/~bojan/upload/main-10.pdf orbit-finite sets> may be of interest.
+* The <https://hackage.haskell.org/package/bound Bound package>, from which the worked examples "Language.Nominal.Examples.Assembly1" and "Language.Nominal.Examples.Assembly2" are adapted. 
 
 -}
 

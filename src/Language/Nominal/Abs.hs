@@ -29,6 +29,7 @@ Examples of practical usage are in "Language.Nominal.Examples.SystemF", e.g. the
            , DeriveFunctor          
            , DeriveFoldable          
            , DeriveTraversable     
+           , PatternSynonyms
 #-}  
 
 module Language.Nominal.Abs 
@@ -36,7 +37,7 @@ module Language.Nominal.Abs
      KAbs -- We don't expose the internals of KAbs.  Use @abst@. 
    , Abs 
 -- * Abstractions (basic functions)
-   , abst , abst', fuse , unfuse, absLabel, conc
+   , abst, abst', pattern (:@>), fuse, unfuse, absLabel, conc
 -- * The bijection between @'Abs'@ and @'Nom'@
    , absToNom, nomToAbs
 -- * Unpacking name-contexts and abstractions
@@ -67,7 +68,7 @@ import Language.Nominal.Nom
 --
 -- It's possible to implement @'KAbs'@ using @'Nom'@ — see @'absToNom'@ and @'nomToAbs'@ — but this requires a @'KSwappable'@ typeclass constraint on @a@, which we prefer to avoid so that e.g. @'KAbs'@ can be a @'Functor'@. 
 --
-data KAbs n a = KAbsWrapper { 
+data KAbs n a = AbsWrapper { 
    absName :: n,   -- ^ We only care about the name for its label.  For reasons having to do with the Haskell type system, it's convenient to wrap this label up in a "dummy name".  We do not export 'absName' outside this file. 
    conc :: n -> a  -- ^ 'conc' stands for /concretion/.  It /concretes/ an abstraction at a particular name.   
 -- Unsafe if the name is not fresh. 
@@ -87,13 +88,28 @@ data KAbs n a = KAbsWrapper {
 type Abs t a = KAbs (KName 'Tom t) a
 
 
-
 -- * Creating abstractions
 
 -- | Create an abstraction by providing a name and a datum in which that name can be swapped (straight out of the paper; <https://link.springer.com/article/10.1007/s001650200016 publisher> and <http://www.gabbay.org.uk/papers.html#newaas-jv author's> pdfs).
 abst :: (Typeable (s :: k), KSwappable k a) => KName s t -> a -> KAbs (KName s t) a
-abst nam a = KAbsWrapper nam $ \nam' -> kswpN nam' nam a
+abst nam a = AbsWrapper nam $ \nam' -> kswpN nam' nam a
 
+infixr 0 :@>
+
+-- | The abstraction pattern 
+--
+-- > n :@> x -> f n x
+--
+-- is synonymous with 
+--
+-- > x' -> x' @@! f 
+--
+-- /Note: ':@>' requires @Typeable@, whereas '@@!' doesn't.  This isn't a bug, it's a feature: ':@>' can also be used as an infix constructor synonym for 'abst', and the 'Typeable' condition comes from there./
+pattern (:@>) :: (Typeable (s :: k), KSwappable k a) => KName s t -> a -> KAbs (KName s t) a
+pattern n :@> f <- n :@@! f where
+    (:@>) = abst
+{-# COMPLETE (:@>) #-}   -- This match on an abstraction is complete.
+ 
 -- | A 'Name' is just a pair of a label and an 'Atom'.  This version of 'abst' that takes a label and an atom, instead of a name.
 abst' :: (Typeable (s :: k), KSwappable k a) => t -> KAtom s -> a -> KAbs (KName s t) a
 abst' = abst .: Name 
@@ -104,7 +120,7 @@ abst' = abst .: Name
 -- > fuse (abstr n x) (abstr n y) = abstr n (x, y)
 --
 fuse :: (KAbs (KName s t) a1, KAbs (KName s t) a2) -> KAbs (KName s t) (a1, a2)
-fuse (KAbsWrapper n1 f1, KAbsWrapper _ f2) = KAbsWrapper n1 $ \n -> (f1 n, f2 n)  
+fuse (AbsWrapper n1 f1, AbsWrapper _ f2) = AbsWrapper n1 $ \n -> (f1 n, f2 n)  
 
 -- | Split two abstractions.
 -- Should satisfy:
@@ -112,8 +128,8 @@ fuse (KAbsWrapper n1 f1, KAbsWrapper _ f2) = KAbsWrapper n1 $ \n -> (f1 n, f2 n)
 -- > unfuse (abstr n (x,y)) = (abstr n x, abstr x y)
 --
 unfuse :: KAbs (KName s t) (a, b) -> (KAbs (KName s t) a, KAbs (KName s t) b) 
-unfuse (KAbsWrapper n f) = 
-   (KAbsWrapper n (fst . f), KAbsWrapper n (snd . f)) 
+unfuse (AbsWrapper n f) = 
+   (AbsWrapper n (fst . f), AbsWrapper n (snd . f)) 
 
 
 -- | Return the label of an abstraction.
@@ -133,20 +149,19 @@ instance Binder (KAbs (KName s t) a) (KName s t) a s where
 
 -- | Support of a.x is the support of x minus a
 instance (Typeable s, KSupport s a, KSupport s t) => KSupport s (KAbs (KName s t) a) where
-   ksupp = resAtC . ksupp   -- Use of 'resAtC' here cleans out the (atom of the) abstracted name.
+   ksupp = resAppC . ksupp   -- Use of 'resAppC' here cleans out the (atom of the) abstracted name.
 
 
 -- * The bijection between @'Abs'@ and @'Nom'@
 
 -- | Bijection between @Nom@ and @Abs@
 absToNom :: KAbs (KName s t) a -> KNom s (KName s t, a)
-absToNom = nomAt (,)
+absToNom = nomApp (,)
 
 
 -- | Bijection between @Nom@ and @Abs@.
 nomToAbs :: (Typeable (s :: k), KSwappable k a) => KNom s (KName s t, a) -> KAbs (KName s t) a
-nomToAbs = genAtC $ uncurry abst 
--- nomToAbs a' = a' @@! \_ (n, a) -> abst n a   
+nomToAbs = genAppC $ uncurry abst 
 
 
 
@@ -155,20 +170,20 @@ nomToAbs = genAtC $ uncurry abst
 
 -- | Abstractions are equal up to fusing their abstracted names. 
 instance (Typeable s, Eq t, Eq a) => Eq (KAbs (KName s t) a) where
-   KAbsWrapper n1 f1 == KAbsWrapper n2 f2 = 
+   AbsWrapper n1 f1 == AbsWrapper n2 f2 = 
       (nameLabel n1 == nameLabel n2) && new (nameLabel n1) (\n -> f1 n == f2 n)  -- note atom ids of @n1@ and @n2@ are discarded. 
 
 
 -- | We show an abstraction by evaluating the function inside `Abs` on a fresh name (with the default `Nothing` label)
 instance (Show t, Show a) => Show (KAbs (KName s t) a) where
-   show a' = a' @@! \n a -> show n ++ ". " ++ show a   -- could also use @@. but would introduce a @Typeable s@ typeclass condition.
+   show a' = a' @@! \n a -> show n ++ ". " ++ show a   -- could also use @@. or :@>, but this would introduce a @Typeable s@ typeclass condition.
 
 
 instance Default t => Applicative (KAbs (KName s t)) where -- use typeclass constraint on t.  all usual labels have defaults
    pure  :: a -> KAbs (KName s t) a
-   pure a = KAbsWrapper (justALabel def) (const a) 
+   pure a = AbsWrapper (justALabel def) (const a) 
    (<*>) :: KAbs (KName s t) (a -> b) -> KAbs (KName s t) a -> KAbs (KName s t) b
-   (<*>) (KAbsWrapper n g) (KAbsWrapper _ a) = KAbsWrapper n $ \nam -> let nam' = (nam `withLabelOf` n) in g nam' $ a nam' -- must choose one of the two labels
+   (<*>) (AbsWrapper n g) (AbsWrapper _ a) = AbsWrapper n $ \nam -> let nam' = (nam `withLabelOf` n) in g nam' $ a nam' -- must choose one of the two labels
 -- TODO: use fuse?
 
 -- | Apply f to a fresh element with label @t@
@@ -183,8 +198,8 @@ absFresh' = absFresh def
 -- | Near inverse to applicative distribution.
 -- @absFuncIn . absFuncOut = id@ but not necessarily other way around 
 absFuncOut :: (Typeable (s :: k), KSwappable k a, Default t) => (KAbs (KName s t) a -> KAbs (KName s t) b) -> KAbs (KName s t) (a -> b)
-absFuncOut f = KAbsWrapper (justALabel def) $ \nam a -> (f (abst nam a)) `conc` nam
--- absFuncOut f = KAbsWrapper (justALabel def) $ \nam a -> conc (f (abst nam a)) nam
+absFuncOut f = AbsWrapper (justALabel def) $ \nam a -> (f (abst nam a)) `conc` nam
+-- absFuncOut f = AbsWrapper (justALabel def) $ \nam a -> conc (f (abst nam a)) nam
 
 
 {- $tests Property-based tests are in "Language.Nominal.Properties.AbsSpec". -}
