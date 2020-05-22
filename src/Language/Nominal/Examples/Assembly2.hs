@@ -78,7 +78,7 @@ evalProg = go . normaliseProg
       go (Add o1 o2 x') = go $ x' `subApp` Lit (evalOperand o1 + evalOperand o2) -- `subApp` substitutes a value for a bound name in an abstraction
       go _              = undefined
 
--- | Add 1 2 [v] Add v v [w] Ret w  
+-- | Add 1 2 [v] Add v v [w] Swp v w Ret w  
 example1 :: Prog 
 example1 = freshNames ["v", "w"] @@! \_ [v, w] -> 
            Add (Lit 1) (Lit 2) $ v :@> Add (Var v) (Var v) $ w :@> Swp (Var v) (Var w) $ Ret (Var w)   -- :@> is name-abstraction, also called 'abst'. 
