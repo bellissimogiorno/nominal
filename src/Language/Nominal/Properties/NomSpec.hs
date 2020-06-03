@@ -1,18 +1,21 @@
 {-# LANGUAGE FlexibleContexts      #-}  -- for non-type variable argument in constraint, namely Support and Swappable
-{-# LANGUAGE DataKinds             #-}  -- for 'Tom 
-{-# LANGUAGE PolyKinds             #-}  -- for 'Tom 
+{-# LANGUAGE DataKinds             #-}  -- for Tom 
+{-# LANGUAGE ScopedTypeVariables   #-}  
 
 module Language.Nominal.Properties.NomSpec
     where
 
 import Data.Function   (on)
 import Data.Set        as S
+import Data.Default
 import Data.List.Extra as LE
 import Test.QuickCheck
 
 import Language.Nominal.Name 
 import Language.Nominal.NameSet
 import Language.Nominal.Nom
+import Language.Nominal.Binder
+-- import Language.Nominal.Unify
 import Language.Nominal.Properties.SpecUtilities ()
 
 -- | Nom creates local binding, which is unpacked separately by equality.  Cf. `UnifySpec` to see how this can be addressed.
@@ -50,6 +53,11 @@ prop_fresh_eq =
       x <- x'
       return $ x == x
 
+{--
+prop_eq_test :: Nom [Name Int] -> Bool
+prop_eq_test n' = (genUnNom' n') & \(_, n1) -> (genUnNom' n') & \(_, n2) -> n1 == n2
+--}
+
 {-- | freshName' = freshNameNom Nothing 
 prop_freshName' :: Bool
 prop_freshName' = unNom $ do -- Nom monad 
@@ -85,13 +93,14 @@ prop_transposeMaybeNom x' =
             (Just l1', Just l2') -> unNom $ ((==) `on` fmap nameLabel) <$> l1' <*> l2' -- fmap is for list, <$> <*> is for Nom 
             _                    -> False
 
+
 -- a,b#x |- (a b).x = x
 prop_new' :: [Name Int] -> Bool
-prop_new' l = (new' :: (Name Int -> Bool) -> Bool) $ \a -> new' $ \b -> (swpN a b l) == l
+prop_new' l = (new :: Int -> (Name Int -> Bool) -> Bool) def $ \a -> new def $ \b -> (swpN a b l) == l
 
 -- a#x |/- (a b).x = x (cf. 'Language.Nominal.Properties.NameSpec.prop_singleswap')
 prop_not_new' :: [Name Int] -> Name Int -> Property 
-prop_not_new' l b = expectFailure $ new' $ \a -> (swpN a b l) == l
+prop_not_new' l b = expectFailure $ new def $ \a -> (swpN a b l) == l
  
 -- a,b#x |- (a b).x = x
 prop_new :: Int -> Int -> [Name Int] -> Bool
@@ -102,8 +111,8 @@ prop_freshFor_notElem :: Name () -> [Name ()] -> Bool
 prop_freshFor_notElem n ns = not (n `elem` ns) == (n `freshFor` ns)
 
 -- atoms-restriction precisely removes atoms from support
-iprop_support_nom :: (Support a, Swappable a) => [Atom] -> a -> Bool
-iprop_support_nom atms a = supp (res atms a) == (supp a) S.\\ (S.fromList atms)
+iprop_support_nom :: forall a. (Support a, Swappable a) => [Atom] -> a -> Bool
+iprop_support_nom atms a = supp ((atms @> a) :: Nom a) == (supp a) S.\\ (S.fromList atms)
 
 prop_support_nom_atmlist :: [Atom] -> [Atom] -> Bool 
 prop_support_nom_atmlist = iprop_support_nom 

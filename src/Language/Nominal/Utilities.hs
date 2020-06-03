@@ -22,24 +22,19 @@ module Language.Nominal.Utilities
     where
 
 import           Data.Foldable      (Foldable (..)) -- for toList
+import           Data.Generics
 import           Data.List
-import           Data.Maybe
 import           Data.List.NonEmpty (NonEmpty (..))
 import           GHC.Stack          (HasCallStack)
 import           Control.Monad      (guard) 
 
 -- * Utilities
 
--- | 'mkCong g f x' tries to compute 'f x'; 
--- if this returns 'Nothing' then control passes to 'g', which should be a function of two arguments which descends recursively into its second argument 'x' and applies its first argument 'mkCong g f' to the subparts of 'x'.
-mkCong :: ((a -> a) -> a -> a) -> (a -> Maybe a) -> a -> a
-mkCong g f x = fromMaybe (g (mkCong g f) x) (f x)
-
--- | Typeclass for types with a notion of congruence
-class Cong a where
-   congRecurse :: (a -> a) -> a -> a
-   cong :: (a -> Maybe a) -> a -> a
-   cong = mkCong congRecurse
+rewrite :: (Typeable a, Data b) => (a -> Maybe a) -> b -> b
+rewrite f b = case cast b of
+    Just a
+        | Just (Just a') <- cast $ f a -> a'
+    _                                  -> gmapT (rewrite f) b
 
 -- | Apply f repeatedly until we reach a fixedpoint
 repeatedly :: Eq a => (a -> a) -> a -> a

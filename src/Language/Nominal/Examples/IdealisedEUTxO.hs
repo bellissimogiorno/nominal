@@ -12,7 +12,6 @@ Haskell rendering of the <https://arxiv.org/abs/2003.14271 mathematical idealisa
 
 {-# LANGUAGE ConstraintKinds            
            , DataKinds                  
-           , PolyKinds                    
            , DefaultSignatures          
            , DeriveAnyClass             
            , DeriveGeneric              
@@ -76,7 +75,6 @@ import           Data.List.NonEmpty         (NonEmpty (..))
 import           Data.List.Unique 
 import           Data.List.Extra            (disjoint, takeEnd)
 import           Data.Maybe
--- import           Data.Maybe.HT              (toMaybe)
 import           Data.Functor               ((<&>)) 
 import           Control.Monad              (guard, zipWithM) 
 import qualified Data.Set                   as S
@@ -90,6 +88,7 @@ import           Language.Nominal.Utilities
 import           Language.Nominal.Name 
 import           Language.Nominal.NameSet
 import           Language.Nominal.Nom
+import           Language.Nominal.Binder
 import           Language.Nominal.Unify
 import           Language.Nominal.Equivar
 
@@ -159,29 +158,23 @@ type Context              = TransactionF NonEmpty
 deriving stock instance (Eq r, Eq d, Eq v) => Eq (Transaction r d v)  
 deriving stock instance (Eq r, Eq d, Eq v) => Eq (Context r d v)
 
-instance Support r => KSupport 'Tom (Input r) where    
-instance (Support d, Support v) => KSupport 'Tom (Output d v) where
-instance (Support d, Support r, Support v) => KSupport 'Tom (Context r d v)
-instance (Support d, Support r, Support v) => KSupport 'Tom (Transaction r d v)
+-- With @ConstraintKinds@, the type synonym @KSupport Tom@ is allowed in the assumptions, but must be spelled out in the head.  
+instance Support r => KSupport Tom (Input r) where    
+instance (Support d, Support v) => KSupport Tom (Output d v) where
+instance (Support d, Support r, Support v) => KSupport Tom (Context r d v)
+instance (Support d, Support r, Support v) => KSupport Tom (Transaction r d v)
+
+instance Swappable r => Swappable (Input r) 
+instance (Swappable d, Swappable v) => Swappable (Output d v)
+instance (Swappable r, Swappable d, Swappable v) => Swappable (Transaction r d v)
+instance (Swappable r, Swappable d, Swappable v) => Swappable (Context r d v)
+
+instance UnifyPerm r => KUnifyPerm Tom (Input r)
+instance (UnifyPerm d, UnifyPerm v) => KUnifyPerm Tom (Output d v)
+instance (UnifyPerm d, UnifyPerm r, UnifyPerm v) => KUnifyPerm Tom (Context r d v)
+instance (UnifyPerm d, UnifyPerm r, UnifyPerm v) => KUnifyPerm Tom (Transaction r d v)
 
 deriving instance (Show (f (Input r)), Show d, Show v) => Show (TransactionF f r d v)
-
--- With @ConstraintKinds@, the type synonym @Swappable@ is allowed in the assumptions, but must be spelled out as @KSwappable Tom@ in the head.  
-instance Swappable r        
-   => KSwappable Tom (Input r) 
-instance (Swappable d, Swappable v) 
-   => KSwappable Tom (Output d v)
-instance (Swappable r, Swappable d, Swappable v) 
-   => KSwappable Tom (Transaction r d v)
-instance (Swappable r, Swappable d, Swappable v) 
-   => KSwappable Tom (Context r d v)
-
-
-instance UnifyPerm r => KUnifyPerm 'Tom (Input r)
-instance (UnifyPerm d, UnifyPerm v) => KUnifyPerm 'Tom (Output d v)
-instance (UnifyPerm d, UnifyPerm r, UnifyPerm v) => KUnifyPerm 'Tom (Context r d v)
-instance (UnifyPerm d, UnifyPerm r, UnifyPerm v) => KUnifyPerm 'Tom (Transaction r d v)
-
 
 
 -- * Calculating input and output positions 
@@ -208,9 +201,8 @@ instance HasInputPositions (Output d v) where
 instance (HasInputPositions a, HasInputPositions b) => HasInputPositions (a,b)
 instance HasInputPositions a => HasInputPositions [a]
 instance HasInputPositions a => HasInputPositions (NonEmpty a)
--- instance HasInputPositions (Transaction r d v) 
 instance HasInputPositions (Transaction r d v) where
-   inputPositions (Transaction is _) = inputPositions is 
+   inputPositions (Transaction is _) = inputPositions is -- Not boilerplate: must not count inputs that appear in the list of outputs. 
 
 -- | A typeclass for types for which we can calculate __output positions__. 
 --
@@ -230,11 +222,11 @@ instance HasOutputPositions (Output d v) where
 instance (HasOutputPositions a, HasOutputPositions b) => HasOutputPositions (a,b)
 instance HasOutputPositions a => HasOutputPositions [a]
 instance HasOutputPositions a => HasOutputPositions (NonEmpty a)
--- instance HasOutputPositions (Transaction r d v)
 instance HasOutputPositions (Transaction r d v) where
-   outputPositions (Transaction _ os) = outputPositions os 
+   outputPositions (Transaction _ os) = outputPositions os  
 
-instance HasOutputPositions a => HasOutputPositions (Nom a) where
+
+instance (Swappable a, HasOutputPositions a) => HasOutputPositions (Nom a) where
    outputPositions = resAppC outputPositions 
 
 -- * Unspent (dangling) elements: UTxO, UTxI, UTxC
@@ -266,22 +258,14 @@ contextsOfTx tx = txPoint tx <$> inputPositions tx
 -- | Calculate __unspent outputs__.
 -- 
 -- We tell an output is unspent when its position isn't bound in the enclosing 'Nom' name-context.
-utxosOfChunk :: (Support r, Support d, Support v) => Chunk r d v -> [Output d v]
+utxosOfChunk :: Validator r d v => Chunk r d v -> [Output d v]
 utxosOfChunk = resAppC $ concatMap outputsOfTx 
--- utxosOfChunk ch = ch @@. \_ txs -> concatMap outputsOfTx txs
--- utxosOfChunk (Chunk x') =
---   resAppC' x' (concatMap outputsOfTx) -- accumulate outputs listwise.  The 'restrict' implicit in the use of 'resAppC'' filters out outputs that mention bound names.
 
 -- | Calculate __unspent inputs__. 
 --
 -- Because we're dealing with transaction lists, we care about dangling /inputs/ (which we call UTxIs) as well as UTxOs.
-utxisOfChunk :: (Support r, Support d, Support v) => Chunk r d v -> [Input r]
+utxisOfChunk :: Validator r d v => Chunk r d v -> [Input r]
 utxisOfChunk = resAppC $ concatMap inputsOfTx -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAppC' filters out outputs that mention bound names.
--- utxisOfChunk ch = ch @@. \_ txs -> concatMap inputsOfTx txs -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAppC'' filters out outputs that mention bound names.
--- utxisOfChunk (Chunk x') = 
---   resAppC' x' (concatMap inputsOfTx) -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAppC'' filters out outputs that mention bound names.
--- utxisOfChunk (Chunk x') = 
---   resAppC' x' (concatMap inputsOfTx) -- accumulate inputs listwise.  The 'restrict' implicit in the use of 'resAppC'' filters out outputs that mention bound names.
 
 -- | What's the point of my context?   The position @p@ of the first element of the input list of a context is deemed to be the "call site" from which the context tries to find a preceding output (with position @p@) in its @'Chunk'@. 
 contextPos :: Context r d v -> Position
@@ -290,7 +274,7 @@ contextPos (Transaction (Input p _ :| _) _) = p
 -- | Calculate unspent __input contexts__. 
 --
 -- Because we're dealing with transaction lists, we care about dangling /contexts/ (which we call UTxCs). 
-utxcsOfChunk :: forall r d v. (Support r, Support d, Support v) => Chunk r d v -> Nom [Context r d v] -- the top-level Nom binding here stores the bound names of the chunk, i.e. those participating in an Input-Output binding within the chunk.
+utxcsOfChunk :: Validator r d v => Chunk r d v -> Nom [Context r d v] -- the top-level Nom binding here stores the bound names of the chunk, i.e. those participating in an Input-Output binding within the chunk.
 utxcsOfChunk = nomApp $ \ps txs ->  
     L.filter (\c -> contextPos c `notElem` ps) (concatMap contextsOfTx txs)
 
@@ -312,18 +296,18 @@ class (Support r, Support d, Support v) => Validator r d v | v -> r d where
 data ValTriv r d = ValTriv
     deriving (Eq, Ord, Show, Read)
 
-deriving via Nameless (ValTriv r d) instance KSwappable Tom (ValTriv r d)
-deriving via Nameless (ValTriv r d) instance KUnifyPerm 'Tom (ValTriv r d)
-deriving via Nameless (ValTriv r d) instance KSupport 'Tom (ValTriv r d)
+deriving via Nameless (ValTriv r d) instance Swappable (ValTriv r d)
+deriving via Nameless (ValTriv r d) instance KUnifyPerm Tom (ValTriv r d)
+deriving via Nameless (ValTriv r d) instance KSupport Tom (ValTriv r d)
 
 instance (Support r, Support d) => Validator r d (ValTriv r d) where
     validate ValTriv _ _ = True
 
 -- | A 'Val' is an equivariant predicate on datum and context.  
 -- For convenience we make it @'Nameless'@. 
-newtype Val r d = Val (EvFun  (d, Context r d (Val r d))  Bool)
+newtype Val r d = Val (EvFun (d, Context r d (Val r d))  Bool)
     deriving newtype IEq 
-    deriving (KSwappable Tom, KRestrict 'Tom, KSupport 'Tom) via Nameless (Val r d)
+    deriving (Swappable, KRestrict Tom, KSupport Tom) via Nameless (Val r d)
 instance Show (Val r d) where
     show = const "Val"
 
@@ -335,13 +319,12 @@ instance (Support r, Support d) => Validator r d (Val r d) where
 -- For convenience we make it @'Nameless'@. 
 newtype ValFin r d = ValFin (EvFinMap (d, Context r d (ValFin r d)) Bool)
     deriving newtype (Generic, Show)
-    deriving (KSwappable Tom, KRestrict 'Tom, KSupport 'Tom) via Nameless (ValFin r d)
+    deriving (Swappable, KRestrict Tom, KSupport Tom) via Nameless (ValFin r d)
 
 instance (UnifyPerm r, UnifyPerm d) => Eq (ValFin r d) where
     ValFin f == ValFin g = f == g  
 
--- instance (UnifyPerm r, UnifyPerm d) => KUnifyPerm 'Tom (ValFin r d)
-deriving via Nameless (ValFin r d) instance (UnifyPerm r, UnifyPerm d) => KUnifyPerm 'Tom (ValFin r d)
+deriving via Nameless (ValFin r d) instance (UnifyPerm r, UnifyPerm d) => KUnifyPerm Tom (ValFin r d) -- @ValFin r d@ is assumed nameless
 
 instance (UnifyPerm r, UnifyPerm d) => Validator r d (ValFin r d) where
     validate (ValFin f) d c = f $$ (d, c)  
@@ -372,26 +355,27 @@ This is a benefit of making the datatype of /chunks/ our primary abstraction.
 newtype Chunk r d v = Chunk {chunkToTxList :: Nom [Transaction r d v]}
     deriving (Show, Generic) 
 
-instance (Swappable r, Swappable d, Swappable v) => KSwappable Tom (Chunk r d v) where
-   kswp n1 n2 (Chunk p) = Chunk (kswp n1 n2 p)
-
-deriving newtype instance (UnifyPerm r, UnifyPerm d, UnifyPerm v) => KUnifyPerm 'Tom (Chunk r d v)
-
-deriving newtype instance (Support r, Support d, Support v) => KSupport 'Tom (Chunk r d v)
+-- equivalent formulation
+-- instance (Swappable r, Swappable d, Swappable v) => Swappable (Chunk r d v) where
+--   kswp n1 n2 (Chunk p) = Chunk (kswp n1 n2 p)
+deriving newtype instance (Swappable r, Swappable d, Swappable v) => Swappable (Chunk r d v)
+deriving newtype instance (UnifyPerm r, UnifyPerm d, UnifyPerm v) => KUnifyPerm Tom (Chunk r d v)
+deriving newtype instance (Support r, Support d, Support v) => KSupport Tom (Chunk r d v) -- could also use deriving via BinderSupp, but since Chunk is just a newtype wrapper around a Nom, a deriving newtype seems more direct.
 
 
 -- | Acts on a @'Chunk'@ by unpacking it as a transaction-list and a list of locally bound atoms, and applying a function. 
-instance Binder (Chunk r d v) [Atom] [Transaction r d v] 'Tom where 
-   (@@) :: Chunk r d v -> ([Atom] -> [Transaction r d v] -> b) -> Nom b
+instance Validator r d v => Binder (Chunk r d v) [Atom] [Transaction r d v] Tom where 
+   (@@) :: Chunk r d v -> ([Atom] -> [Transaction r d v] -> b) -> Nom b -- ^ The destructor.  
    (@@) (Chunk nomtxs) = (@@) nomtxs 
-
+   resMay :: [Atom] -> [Transaction r d v] -> Maybe (Chunk r d v) -- ^ The constructor.  Because chunks are subject to validation conditions, not every list of transactions is a valid chunk.  Thus, we define 'resMay' instead of '(@>)'. 
+   resMay = const txListToChunk
 
 -- | Chunk equality tests for equality, with permutative unification on the local names
 --
 -- @(==) = unifiablePerm@ would be wrong; we should only unify /bound/ atoms.
 --
 -- Note: @'Ren'@ equality compares nubs (non-identity mappings) 
-instance (UnifyPerm r, UnifyPerm d, UnifyPerm v) => Eq (Chunk r d v) where
+instance (UnifyPerm r, UnifyPerm d, UnifyPerm v, Validator r d v) => Eq (Chunk r d v) where
    ch1 == ch2 = 
       ch1 @@. \as1 txs1 ->  -- unpack the local bindings of both chunks
       ch2 @@. \as2 txs2 ->
@@ -413,8 +397,7 @@ unsafeSingletonChunk = fromMaybe err . singletonChunk
     err = error "singletonChunk: invalid transaction"
 
 -- | Combine a list of transactions into a @'Chunk'@.  Return @'Nothing'@ if list does not represent a valid chunk.
-txListToChunk :: (HasCallStack, Validator r d v) 
-   => [Transaction r d v] -> Maybe (Chunk r d v)
+txListToChunk :: Validator r d v => [Transaction r d v] -> Maybe (Chunk r d v)
 txListToChunk = foldMap singletonChunk -- relies on Monoid action on Maybe Chunk 
 
 
@@ -544,7 +527,7 @@ appendTxChunk tx ch = ch @@. \_ txs -> -- use of '@@.' here ensures that any ato
        && disjoint txOuts txsIns  -- no outputs in tx clash with inputs in txs
        && disjoint txIns  txsIns  -- no inputs in tx clash with inputs in txs
        && all validate' bn)       -- all validators happy with context   
-      (Chunk $ res bn $ tx : txs) -- all OK?  then push tx 
+      (Chunk $ bn @> tx : txs)    -- all OK?  then push tx 
  where
    validate' :: Position -> Bool
    validate' pos =
@@ -559,7 +542,7 @@ appendTxMaybeChunk :: Validator r d v => Transaction r d v -> Maybe (Chunk r d v
 appendTxMaybeChunk = (=<<) . appendTxChunk 
  
 -- | Restrict atoms in a 'Chunk'.
-instance (Swappable r, Swappable d, Swappable v) => KRestrict 'Tom (Chunk r d v) where 
+instance (Swappable r, Swappable d, Swappable v) => KRestrict Tom (Chunk r d v) where 
    restrict atms (Chunk x) = Chunk $ restrict atms x -- Relies on restrict being monadic on Maybe
 
 
@@ -608,13 +591,13 @@ instance Validator r d v => Monoid (Maybe (Chunk r d v)) where
 -- * Splitting chunks up 
 
 -- | For debugging
-genUnNomChunk :: Chunk r d v -> Chunk r d v
+genUnNomChunk :: Validator r d v => Chunk r d v -> Chunk r d v
 genUnNomChunk = genAppC $ Chunk . return 
 
 -- | Check whether one chunk is a prefix of another.  See @'chunkTail'@ to understand why the @'Nom'@ binding on the first argument is required.
-isPrefixChunk :: (UnifyPerm r, UnifyPerm d, UnifyPerm v, Swappable r, Swappable d, Swappable v) => Nom (Chunk r d v) -> Chunk r d v -> Bool  -- Need @Swappable@ instances for @'@@.'@ 
+isPrefixChunk :: (UnifyPerm r, UnifyPerm d, UnifyPerm v, Validator r d v) => Nom (Chunk r d v) -> Chunk r d v -> Bool  
 isPrefixChunk ch1' ch2 =     
-   ch1' @@. \as ch1 ->        -- as = local names in putative prefix 
+   ch1' @@. \as  ch1  ->   -- as = local names in putative prefix 
    ch1  @@. \as1 txs1 ->  
    ch2  @@. \as2 txs2 -> 
       case evPrefixRen txs1 txs2 of 
@@ -623,7 +606,7 @@ isPrefixChunk ch1' ch2 =
 
 
 -- | Calculate the length of a Chunk
-chunkLength :: (Swappable r, Swappable d, Swappable v) => Chunk r d v -> Int 
+chunkLength :: Validator r d v => Chunk r d v -> Int 
 chunkLength = resAppC L.length 
 
 
@@ -640,16 +623,15 @@ chunkHead ch = transposeNomMaybe $ nomAppC safeHead ch
 chunkTail :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Nom (Chunk r d v))
 chunkTail ch = transposeNomMaybe $ nomAppC ((=<<) txListToChunk . safeTail) ch 
 -- chunkTail ch = transposeNomMaybe $ nomAppC (\txs -> safeTail txs >>= txListToChunk) ch 
--- chunkTail ch = transposeNomMaybe $ ch @@ const ((txListToChunk =<<) . safeTail)
 
 
 -- | Compare the code for this function with the code for @'chunkTail'@.  
 -- It looks plausible ... but it's wrong.
 --
--- It looks like it returns the tail of a chunk, and indeed it does.  However, the result is not a chunk because positions get exposed due to the use of '@@!'.
+-- It looks like it returns the tail of a chunk, and indeed it does.  However, the result is not a chunk because positions get exposed. 
 --
 -- See the test 'Language.Nominal.Properties.Examples.IdealisedEUTxOSpec.prop_warningNotChunkTail_is_not_chunk'.
-warningNotChunkTail :: (UnifyPerm r, UnifyPerm d, Swappable r, Swappable d, Swappable v) => Chunk r d v -> Maybe (Chunk r d v)
+warningNotChunkTail :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Chunk r d v)
 warningNotChunkTail = genAppC $ \txs -> (Chunk . return) <$> safeTail txs 
 {-- warningNotChunkTail ch = ch @@. \_ txs -> case txs of
     []         -> Nothing
@@ -669,19 +651,18 @@ subTxListOf = nomAppC subsequences
 -- | Take a chunk and reverse its transactions.  Usually this will result in an invalid chunk, in which case we get @Nothing@.  
 -- Used for testing. 
 reverseTxsOf :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Chunk r d v) 
-reverseTxsOf = nomTxListToChunk . nomAppC L.reverse -- TODO: could improve further by losing nom? 
--- reverseTxsOf ch = nomTxListToChunk $ ch @@ const L.reverse 
+reverseTxsOf = nomTxListToChunk . nomAppC L.reverse 
 
 -- | Split a chunk into a head and a tail.
 chunkToHdTl :: Validator r d v => Chunk r d v -> Maybe (Nom (Transaction r d v, Chunk r d v))
 chunkToHdTl (Chunk x') = transposeNomMaybe $ x' @@ \_ x -> case x of
+   (tx:txs) -> return (tx, fromJust $ txListToChunk txs)
    []       -> Nothing
-   (tx:txs) -> Just $ (tx, fromJust $ txListToChunk txs)
 
 -- | Split a chunk into a head and a head and a tail.
 chunkToHdHdTl :: Validator r d v => Chunk r d v -> Maybe (Nom (Transaction r d v, Transaction r d v, Chunk r d v))
 chunkToHdHdTl (Chunk x') = transposeNomMaybe $ x' @@ \_ x -> case x of
-   (tx1:tx2:txs) -> Just $ (tx1, tx2, fromJust $ txListToChunk txs)
+   (tx1:tx2:txs) -> return (tx1, tx2, fromJust $ txListToChunk txs)
    _             -> Nothing
 
 
@@ -691,9 +672,9 @@ chunkToHdHdTl (Chunk x') = transposeNomMaybe $ x' @@ \_ x -> case x of
 newtype Blockchain r d v = Blockchain {getBlockchain :: Chunk r d v}
     deriving (Show, Generic)
 
-instance (Swappable r, Swappable d, Swappable v) => KSwappable Tom (Blockchain r d v) 
-instance (Support r, Support d, Support v) => KSupport 'Tom (Blockchain r d v) 
-instance (UnifyPerm r, UnifyPerm d, UnifyPerm v) => KUnifyPerm 'Tom (Blockchain r d v) 
+instance (Swappable r, Swappable d, Swappable v) => Swappable (Blockchain r d v) 
+instance (Support r, Support d, Support v) => KSupport Tom (Blockchain r d v) 
+instance (UnifyPerm r, UnifyPerm d, UnifyPerm v) => KUnifyPerm Tom (Blockchain r d v) 
 
 -- | Smart constructor for a @'Blockchain'@. 
 -- Ensures only valid blockchains are constructed, by testing for @'isBlockchain'@.
@@ -706,7 +687,7 @@ blockchain c
 -- * Is Chunk / Blockchain check 
 
 -- | Check that the correct atoms are bound in a 'Chunk'.
-chunkBindingOK ::  Validator r d v => Chunk r d v -> Bool 
+chunkBindingOK :: Validator r d v => Chunk r d v -> Bool 
 chunkBindingOK = resApp $ \ps txs -> let (ips, ops) = positionsOfTxs txs in 
    ps `intersect` (ips ++ ops) == ips `intersect` ops 
 
@@ -804,7 +785,7 @@ instance (Eq d, IEq v) => IEq (Output d v) where
       return $ p == p' && eqvd && d == d'
 
 -- | Intensional equality 
-equivChunk :: (Eq r, Eq d, IEq v, Support r, Support d, Support v) => Chunk r d v -> Chunk r d v -> IO Bool
+equivChunk :: (Eq r, Eq d, IEq v, Validator r d v) => Chunk r d v -> Chunk r d v -> IO Bool
 equivChunk txlist1 txlist2 = and <$> sequence 
    [ utxosOfChunk txlist1 `iEq` utxosOfChunk txlist2 
    , utxisOfChunk txlist1 `iEq` utxisOfChunk txlist2

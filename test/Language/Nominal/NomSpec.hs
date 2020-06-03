@@ -17,7 +17,6 @@ spec = do
     it "freshName () /= freshName (). Lazy evaluation means distinct fresh names generated." $ property prop_fresh_neq'
     it "Same thing using let." $ property prop_fresh_neq''
     it "But if we unpack a single fresh name monadically, we can compare it for equality." $ property prop_fresh_eq
-    -- it "freshName' = freshNameNom Nothing" $ property prop_freshName'
     it "~ (n # (n,n'))" $ property prop_freshFor1
     it "n # n'" $ property prop_freshFor2
     it "Nom Maybe -> Maybe Nom -> Nom Maybe = id" $ property prop_transposeNomMaybe

@@ -4,9 +4,10 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE PolyKinds              #-}
+-- {-# LANGUAGE PolyKinds              #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE TypeApplications       #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -19,6 +20,7 @@ import Test.QuickCheck
 import Language.Nominal.Name 
 import Language.Nominal.NameSet 
 import Language.Nominal.Nom
+import Language.Nominal.Binder
 import Language.Nominal.Abs
 import Language.Nominal.Unify
 
@@ -27,13 +29,13 @@ import Language.Nominal.Unify
 prop_l_l' :: [Name Int] -> [Name Int] -> Property 
 prop_l_l' ns' ns = expectFailure $ unifiablePerm ns ns' 
 
--- | res ns (res ns' x)  is unifiable with  res ns' (res ns x)  (using type application)
+-- | ns @> ns' @> x  is unifiable with  ns' @> ns @> x  
 prop_res_res :: [Atom] -> [Atom] -> [Atom] -> Bool
-prop_res_res ns' ns x = unifiablePerm (restrict ns' (res ns x)) (restrict ns (res ns' x))
+prop_res_res ns' ns x = kunifiablePerm atTom (restrict ns' ((ns @> x) :: Nom [Atom])) (restrict ns (ns' @> x))
 
 -- | x' -> ns x -> res ns x unifies with x'
 prop_res_unres :: Nom [Name Int] -> Bool
-prop_res_unres x' = x' @@! \atms x -> unifiablePerm x' $ res atms x
+prop_res_unres x' = x' @@! \atms x -> unifiablePerm x' $ atms @> x
 
 -- | Unifiers correctly calculated 
 prop_unify_ren :: [Name ()] -> [Name ()] -> Property 

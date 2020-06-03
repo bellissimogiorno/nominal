@@ -7,7 +7,9 @@ Maintainer  : murdoch.gabbay@gmail.com
 Stability   : experimental
 Portability : POSIX
 
-Based on <https://github.com/ekmett/bound/blob/master/examples/Imperative.hs an example in the Bound package>.  What makes this interesting is the binding behaviour of 'Add'. 
+Based on <https://github.com/ekmett/bound/blob/master/examples/Imperative.hs an example in the Bound package>.  
+What makes this interesting is the binding behaviour of 'Add', which adds two numbers and binds the result to a fresh register with scope over subsequent instructions. 
+
 
 -}
 
@@ -26,6 +28,7 @@ import GHC.Generics
 
 import Language.Nominal.Name 
 import Language.Nominal.Nom
+import Language.Nominal.Binder
 import Language.Nominal.Abs 
 import Language.Nominal.Sub 
 
@@ -63,13 +66,12 @@ evalOperand (Var _) = undefined
 -- | Evaluate a program 
 evalProg :: Prog -> Int
 evalProg (Ret o)        = evalOperand o
-evalProg (Add o1 o2 x') = evalProg (x' `subApp` Lit (evalOperand o1 + evalOperand o2)) -- `subApp` substitutes a value for a bound name in an abstraction
+evalProg (Add o1 o2 x') = evalProg (x' `conc` Lit (evalOperand o1 + evalOperand o2)) -- `conc` here substitutes a value for a bound name in an abstraction
 
 -- | Add 1 2 [v] Add v v [w] Ret w  
 example1 :: Prog 
 example1 = freshNames ["v", "w"] @@! \_ [v, w] -> 
            Add (Lit 1) (Lit 2) $ v :@> Add (Var v) (Var v) $ w :@> Ret (Var w) -- :@> is name-abstraction, also called 'abst'. 
---           Add (Lit 1) (Lit 2) $ abst v $ Add (Var v) (Var v) $ abst w $ Ret (Var w) -- :@> is name-abstraction, also called 'abst'. 
 
 -- | 6 
 example1eval :: Int 

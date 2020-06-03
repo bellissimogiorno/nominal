@@ -24,7 +24,7 @@ Unification by permutation
            , InstanceSigs               
            , MultiParamTypeClasses      
            , PartialTypeSignatures        
-           , PolyKinds                    
+           -- , PolyKinds                    
            , ScopedTypeVariables        
            , StandaloneDeriving         
            , TupleSections              
@@ -75,9 +75,10 @@ import           GHC.Generics
 import           Type.Reflection
 
 import           Language.Nominal.Name
-import           Language.Nominal.Nom
-import           Language.Nominal.Abs
 import           Language.Nominal.NameSet
+import           Language.Nominal.Nom
+import           Language.Nominal.Binder
+import           Language.Nominal.Abs
 
 -- $setup
 -- >>> import Data.Set as S
@@ -106,10 +107,10 @@ import           Language.Nominal.NameSet
 newtype KRen s = Ren {unRen :: Maybe (DM.Map (KAtom s) (KAtom s))}
    deriving (Show, Generic)
 
-instance Typeable s => KSwappable k (KRen (s :: k)) where 
+instance Typeable s => Swappable (KRen s) where 
  
 -- | Renaming on a @'Tom'@ instance
-type Ren = KRen 'Tom
+type Ren = KRen Tom
 
 -- | The identity renaming.  
 idRen :: KRen s 
@@ -228,7 +229,7 @@ class KSupport s a => KUnifyPerm s a where
     ren r = to . gren r . from
 
 -- | 'Tom'-instance of typeclass 'KUnifyPerm'.
-type UnifyPerm = KUnifyPerm 'Tom
+type UnifyPerm = KUnifyPerm Tom
 
 -- | Unify on 'Atom's, thus 'Tom'-instance of 'kunifyPerm'.
 unifyPerm :: UnifyPerm a => a -> a -> Ren
@@ -256,8 +257,8 @@ instance (Typeable s, Eq a) => KUnifyPerm s (Nameless a) where
     ren _ = id
 
 deriving via Nameless Bool instance Typeable s => KUnifyPerm s Bool
-deriving via Nameless Int instance Typeable s => KUnifyPerm s Int
-deriving via Nameless () instance Typeable s => KUnifyPerm s ()
+deriving via Nameless Int  instance Typeable s => KUnifyPerm s Int
+deriving via Nameless ()   instance Typeable s => KUnifyPerm s ()
 deriving via Nameless Char instance Typeable s => KUnifyPerm s Char
 
 instance (KUnifyPerm s a, KUnifyPerm s b) => KUnifyPerm s (a, b)
@@ -270,7 +271,7 @@ instance KUnifyPerm s a => KUnifyPerm s (Maybe a)
 instance (KUnifyPerm s a, KUnifyPerm s b) => KUnifyPerm s (Either a b)
 
 -- | Unify atoms
-instance (Typeable (s :: k), Typeable (t :: k)) => KUnifyPerm s (KAtom t) where
+instance (Typeable s, Typeable t) => KUnifyPerm s (KAtom t) where
 
     kunifyPerm :: proxy s -> KAtom t -> KAtom t -> KRen s
     kunifyPerm _ a b = case testEquality (typeRep :: TypeRep s) (typeRep :: TypeRep t) of
@@ -287,7 +288,7 @@ instance (Typeable (s :: k), Typeable (t :: k)) => KUnifyPerm s (KAtom t) where
     ren (Ren Nothing)  a = a
 
 -- | Unify names: they behave just an atom-label tuple  
-instance (Typeable (s :: k), Typeable (u :: k), KUnifyPerm s t) => KUnifyPerm s (KName u t)
+instance (Typeable s, Typeable u, KUnifyPerm s t) => KUnifyPerm s (KName u t)
 
 -- | Unify 'Nom' abstractions.
 -- Unpack, unify, clean out fresh names

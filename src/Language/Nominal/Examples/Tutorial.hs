@@ -73,6 +73,7 @@ import Data.Default
 
 import Language.Nominal.Name 
 import Language.Nominal.Nom
+import Language.Nominal.Binder
 import Language.Nominal.Abs 
 import Language.Nominal.Sub 
 import Language.Nominal.Unify

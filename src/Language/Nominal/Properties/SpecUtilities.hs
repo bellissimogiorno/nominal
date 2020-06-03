@@ -9,11 +9,10 @@
 module Language.Nominal.Properties.SpecUtilities
     where
 
-import           System.IO.Unsafe   (unsafePerformIO)
-import qualified Data.List.NonEmpty as NE
-import           Data.Proxy         (Proxy (..))
-import           Data.Unique        (Unique, newUnique)
-import           Type.Reflection    (Typeable)
+import qualified Data.List.NonEmpty                as NE
+import           Data.Proxy                        (Proxy (..))
+import           System.IO.Unsafe                  (unsafePerformIO)
+import           Type.Reflection                   (Typeable)
 
 import           Test.QuickCheck
 
@@ -21,7 +20,9 @@ import           Language.Nominal.Abs
 import           Language.Nominal.Examples.SystemF
 import           Language.Nominal.Name
 import           Language.Nominal.Nom
+import           Language.Nominal.Binder
 import           Language.Nominal.Unify
+import           Language.Nominal.Unique
 import           Language.Nominal.Equivar
 
 myatomnames :: [String]
@@ -49,17 +50,17 @@ instance {-# OVERLAPPING #-} Arbitrary (Name String) where
       atm <- arbitrary  
       return $ Name (show atm) atm
 
-instance (Typeable s, KSwappable k a, Arbitrary (KName (s :: k) t), Arbitrary a) => Arbitrary (KAbs (KName s t) a) where
+instance (Typeable s, Swappable t, Swappable a, Arbitrary (KName s t), Arbitrary a) => Arbitrary (KAbs (KName s t) a) where
    arbitrary = do -- Gen monad
       nam <- arbitrary
       a   <- arbitrary
-      return $ abst nam a  -- hlint suggestion ignored
+      return $ nam @> a  -- hlint suggestion ignored
 
-instance (Swappable a, Arbitrary a) => Arbitrary (Nom a) where
+instance (Typeable s, Swappable a, Arbitrary a) => Arbitrary (KNom s a) where
    arbitrary = do -- Gen monad
       nams <- arbitrary
       a    <- arbitrary
-      return $ res nams a   -- hlint suggestion ignored
+      return $ nams @> a   -- hlint suggestion ignored
 
 -- | For QuickCheck tests: pick a type
 instance Arbitrary Typ where
@@ -79,7 +80,7 @@ arbitrarySizedTyp m =
            ,do -- Gen monad
                t <- arbitrarySizedTyp (m-1)
                n <- arbitrary
-               return $ All (abst n t)
+               return $ All (n @> t)
            ]
 
 -- | For QuickCheck tests: pick a term 
@@ -100,7 +101,7 @@ arbitrarySizedTrm m =
            ,do -- Gen monad
                t <- arbitrarySizedTrm (m-1)
                n <- arbitrary
-               return $ Lam (abst n t)
+               return $ Lam (n @> t)
            ,do -- Gen monad
                t1 <- arbitrarySizedTrm (m `div` 2) 
                t2 <- arbitrarySizedTyp (m `div` 2)
@@ -108,7 +109,7 @@ arbitrarySizedTrm m =
            ,do -- Gen monad
                t <- arbitrarySizedTrm (m-1)
                n <- arbitrary
-               return $ TLam (abst n t)
+               return $ TLam (n @> t)
            ]
 
 instance Arbitrary a => Arbitrary (NE.NonEmpty a) where

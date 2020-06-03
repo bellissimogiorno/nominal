@@ -17,9 +17,10 @@ Syntax and reductions of System F using the Nominal package
            , MultiParamTypeClasses 
            , FlexibleInstances     
            , LambdaCase            
-           , PolyKinds             
+           -- , PolyKinds             
            , DefaultSignatures     
            , DeriveAnyClass        
+           , DeriveDataTypeable
            , DeriveGeneric         
            , EmptyCase             
            , FlexibleInstances     
@@ -37,7 +38,7 @@ module Language.Nominal.Examples.SystemF
     ( 
 -- * Introduction
 -- $intro
-    AKind (..),
+    ATrm, ATyp,
 -- * System F types 
     NTypLabel, NTyp, Typ (..), typRecurse,
 -- * System F terms
@@ -55,13 +56,14 @@ module Language.Nominal.Examples.SystemF
     )
     where
 
+import Data.Generics              hiding (Generic, typeOf)
 import Data.Maybe
 import GHC.Generics
-import Control.Monad (guard)
+import Control.Monad              (guard)
 
 import Language.Nominal.Utilities 
 import Language.Nominal.Name 
-import Language.Nominal.Nom
+import Language.Nominal.Binder
 import Language.Nominal.Abs 
 import Language.Nominal.Sub 
 
@@ -79,18 +81,22 @@ We start with atoms:
  
 -}
 
--- * Atoms
-
--- | With @DataKinds@, this datatype gives us the following:
+-- | With @DataKinds@, we obtain:
 --
--- * A kind of atoms @AKind@, containing two sorts:
--- * @ATyp@ a sort of atoms to identify type variables @'NTyp'@, and
--- * @ATrm@ a sort of atoms to identify term variables @'NTrm'@.
+-- * @ATyp@ a type of atoms to identify type variables @'NTyp'@, and
+-- * @ATrm@ a type of atoms to identify term variables @'NTrm'@.
 --
 -- See 'Language.Nominal.Name.Tom' for more discussion of how this works.
-data AKind = ATyp -- ^ Atoms for type variable names 'NTyp' 
-           | ATrm -- ^ Atoms for term variable names 'NTrm'
-
+data ATyp 
+   deriving (Data)
+-- | With @DataKinds@, we obtain:
+--
+-- * @ATyp@ a type of atoms to identify type variables @'NTyp'@, and
+-- * @ATrm@ a type of atoms to identify term variables @'NTrm'@.
+--
+-- See 'Language.Nominal.Name.Tom' for more discussion of how this works.
+data ATrm 
+   deriving (Data)
 
 -- * System F types 
 
@@ -98,16 +104,16 @@ data AKind = ATyp -- ^ Atoms for type variable names 'NTyp'
 type NTypLabel = String 
 -- | A type variable name.  Internally, this consists of
 --
--- * an atom of type @KAtom 'ATyp@, and
+-- * an atom of type @KAtom ATyp@, and
 -- * a label of type @'NTypLabel'@, which is just a display name in @'String'@. 
-type NTyp = KName 'ATyp NTypLabel
+type NTyp = KName ATyp NTypLabel
 
 -- | Datatype of System F types 
 --
--- We use @Generic@ to deduce a swapping action for atoms of sorts @''ATyp'@ and @''ATrm'@ (i.e. of kind @AKind@). 
+-- We use @Generic@ to deduce a swapping action for atoms of sorts @'ATyp'@ and @'ATrm'@. 
 -- Just once, we spell out the definition implicit in the generic instance:  
 --
--- > instance KSwappable AKind Typ where
+-- > instance Swappable Typ where
 -- >    swpN n1 n2 (TVar n)   = TVar $ swpN n1 n2 n
 -- >    swpN n1 n2 (t' :-> t) = swpN n1 n2 t' :-> swpN n1 n2 t
 -- >    swpN n1 n2 (All x)    = All $ swpN n1 n2 x
@@ -120,26 +126,16 @@ data Typ =
    TVar NTyp           -- ^ Type variable
  | Typ :-> Typ         -- ^ Type application
  | All (KAbs NTyp Typ) -- ^ Type forall-abstraction
- deriving (Eq, Generic, KSwappable AKind)
-
--- | A congruence descends into the type.  Action on binder is automagically capture-avoiding.
-instance Cong Typ where
-   congRecurse :: (Typ -> Typ) -> Typ -> Typ 
-   congRecurse k = \case
-      TVar n    -> TVar n
-      s1 :-> s2 -> k s1 :-> k s2
-      All x     -> All $ fmap k x 
-
-
+ deriving (Eq, Generic, Swappable, Typeable, Data)
  
 -- | Substitution acts on type variables.  Capture-avoidance is automagical.
 instance KSub NTyp Typ Typ where
-   sub :: NTyp -> Typ -> Typ -> Typ 
-   sub a t = cong $ \case
-      (TVar n) -> toMaybe (a == n) t -- note name-equality is atom-wise and ignores labels 
-      _        -> Nothing
+    sub :: NTyp -> Typ -> Typ -> Typ 
+    sub a t = rewrite $ \case -- 'rewrite' comes from Scrap-Your-Boilerplate generics.  
+        TVar n | n == a -> Just t  -- note name-equality is atom-wise and ignores labels 
+        _               -> Nothing 
 
--- | Nominal recursion scheme.  We never use it because it's implicit in pattern-matching plus `@@!`.
+-- | Nominal recursion scheme.  We never use it because it's implicit in pattern-matching.  See e.g. code for 'typeOf', 'nf', and 'ppp'. 
 typRecurse :: (NTyp -> a) -> (Typ -> Typ -> a) -> (NTyp -> Typ -> a) -> Typ -> a 
 typRecurse f1 _ _ (TVar n)    = f1 n
 typRecurse _ f2 _ (s1 :-> s2) = f2 s1 s2
@@ -155,7 +151,7 @@ type NTrmLabel = ( String -- Display name of term variable
                  , Typ    -- Type of the term variable
                  )
 -- | A term variable name 
-type NTrm = KName 'ATrm NTrmLabel
+type NTrm = KName ATrm NTrmLabel
 
 -- | Substitute type variables with type in term variable.  
 -- Non-trivial because a term variable carries a label which contains a type.  
@@ -175,33 +171,27 @@ data Trm =  Var NTrm             -- ^ Term variable, labelled by its display nam
           | TLam (KAbs NTyp Trm) -- ^ Nominal atoms-abstraction by a type variable.   
   deriving ( Eq
            , Generic
-           , KSwappable AKind   --- swappings derived automatically
+           , Swappable          --- swappings derived automatically
            , KSub NTyp Typ      --- substitution of type names for types derived automatically
+           , Typeable
+           , Data
            )
-
--- This notion of congruence is good for term substitution. 
--- (Type substitution comes from the generic instance.)
-instance Cong Trm where
-   congRecurse k = \case
-         Var n      -> Var n
-         App s1 s2  -> App (k s1) (k s2)
-         Lam x      -> Lam $ fmap k x
-         TApp s1 t2 -> TApp (k s1) t2 
-         TLam x     -> TLam $ fmap k x
 
 -- | Substitute term variable with term in term
 instance KSub NTrm Trm Trm where
    sub :: NTrm -> Trm -> Trm -> Trm 
-   sub a t = cong $ \case 
-         Var n -> toMaybe (a == n) t  -- note name-equality is atom-wise and ignores labels 
-         _     -> Nothing
+   sub a t = rewrite $ \case          -- 'rewrite' comes from Scrap-Your-Boilerplate generics.  
+        Var n | n == a -> Just t  -- note name-equality is atom-wise and ignores labels 
+        _              -> Nothing 
+{--        Var n -> toMaybe (a == n) t  -- note name-equality is atom-wise and ignores labels 
+        _     -> Nothing --}
 
 -- | Calculate type of term, maybe
 typeOf :: Trm -> Maybe Typ 
 typeOf (Var n)     = let (_, t) = nameLabel n in Just t
 typeOf (TLam (tp :@> tm)) = do -- Maybe monad
    typetm <- typeOf tm 
-   return $ All (abst tp typetm) 
+   return $ All (tp :@> typetm) 
 typeOf (Lam (n :@> tm)) = do -- Maybe monad
    typetm <- typeOf tm
    let (_, t) = nameLabel n
@@ -213,7 +203,7 @@ typeOf (App s1 s2) = do -- Maybe monad
    return t1b 
 typeOf (TApp s t)  = do -- Maybe monad
    All x' <- typeOf s
-   return $ subApp x' t -- substitution of type name for type, in type 
+   return $ x' `conc` t -- substitution of type name for type, in type 
 
 -- | Calculate type of term; raise error if none exists
 typeOf' :: Trm -> Typ
@@ -231,9 +221,10 @@ nf :: Trm -> Maybe Trm
 nf s = guard (typeable s) >> return (repeatedly nf_ s)
    where -- behaviour on untypeable terms is undefined
    nf_ :: Trm -> Trm
-   nf_ = cong $ \case 
-            TApp (TLam x') t2 -> return . nf_ $ subApp x' t2
-            App  (Lam x')  s2 -> return . nf_ $ subApp x' (nf_ s2)
+   nf_ = rewrite $ \case -- 'rewrite' comes from Scrap-Your-Boilerplate generics.  
+
+            TApp (TLam x') t2 -> return . nf_ $ x' `conc` t2
+            App  (Lam x')  s2 -> return . nf_ $ x' `conc` (nf_ s2)
             _                 -> Nothing
 
 -- | Normal form; raise error if none

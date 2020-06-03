@@ -5,6 +5,7 @@ import Test.QuickCheck
 
 import Language.Nominal.Name 
 import Language.Nominal.Nom
+import Language.Nominal.Binder
 import Language.Nominal.Abs
 import Language.Nominal.Unify
 import Language.Nominal.Properties.SpecUtilities ()

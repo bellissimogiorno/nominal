@@ -8,6 +8,8 @@ Stability   : experimental
 Portability : POSIX
 
 Based on <https://github.com/ekmett/bound/blob/master/examples/Imperative.hs an example in the Bound package>.  This is interesting for the binding behaviour of 'Add' and the swapping behaviour of 'Swp'. 
+'Add' adds two numbers and binds the result to a fresh register with scope over subsequent instructions. 
+'Swp' swaps the contents of two registers with scope over subsequent instructions. 
 
 -}
 
@@ -26,6 +28,7 @@ import GHC.Generics
 
 import Language.Nominal.Name 
 import Language.Nominal.Nom
+import Language.Nominal.Binder
 import Language.Nominal.Abs 
 import Language.Nominal.Sub 
 
@@ -75,7 +78,7 @@ evalProg = go . normaliseProg
    where 
       go :: Prog -> Int
       go (Ret o)        = evalOperand o
-      go (Add o1 o2 x') = go $ x' `subApp` Lit (evalOperand o1 + evalOperand o2) -- `subApp` substitutes a value for a bound name in an abstraction
+      go (Add o1 o2 x') = go $ x' `conc` Lit (evalOperand o1 + evalOperand o2) -- `conc` here substitutes a value for a bound name in an abstraction
       go _              = undefined
 
 -- | Add 1 2 [v] Add v v [w] Swp v w Ret w  

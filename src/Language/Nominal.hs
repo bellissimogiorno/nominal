@@ -15,11 +15,11 @@ Nominal-flavoured implementation of data in a context of local names, designed f
 
 module Language.Nominal
      ( 
--- * Quick links
--- $quicklinks
-
 -- * Introduction
 -- $blurb
+
+-- * Quick links
+-- $quicklinks
 
 -- * Type(class) overview 
 -- $quickref
@@ -28,6 +28,7 @@ module Language.Nominal
      , module Language.Nominal.NameSet
      , module Language.Nominal.Sub
      , module Language.Nominal.Nom
+     , module Language.Nominal.Binder
      , module Language.Nominal.Abs
      , module Language.Nominal.Equivar
      , module Language.Nominal.Unify
@@ -38,6 +39,7 @@ import Language.Nominal.Name
 import Language.Nominal.NameSet
 import Language.Nominal.Sub
 import Language.Nominal.Nom 
+import Language.Nominal.Binder
 import Language.Nominal.Abs 
 import Language.Nominal.Equivar
 import Language.Nominal.Unify
@@ -64,6 +66,13 @@ import Language.Nominal.Unify
 * This draft book on <https://www.mimuw.edu.pl/~bojan/upload/main-10.pdf orbit-finite sets> may be of interest.
 * The <https://hackage.haskell.org/package/bound Bound package>, from which the worked examples "Language.Nominal.Examples.Assembly1" and "Language.Nominal.Examples.Assembly2" are adapted. 
 
+== Related work 
+* <https://hackage.haskell.org/package/bound bound: Making de Bruijn Succ less>
+* <https://hackage.haskell.org/package/unbound unbound: Generic support for programming with names and binders>
+* <https://hackage.haskell.org/package/nominal nominal: Binders and alpha-equivalence made easy> 
+* <https://www.mimuw.edu.pl/~szynwelski/nlambda/doc/ NLambda: computations over infinite structures using logical formulas and SMT solving>
+
+/(Something I should put on this list?  Let me know.)/
 -}
 
 {- $quickref

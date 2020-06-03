@@ -31,13 +31,13 @@ import Test.QuickCheck
 import Type.Reflection                           
 
 import Language.Nominal.Examples.IdealisedEUTxO
--- import Language.Nominal.Name                      (Smallish (..))
 import Language.Nominal.NameSet
 import Language.Nominal.Properties.SpecUtilities  (genEvFinMap)
 import Language.Nominal.Properties.UnifySpec      ()
 import Language.Nominal.Unify
 import Language.Nominal.Equivar
 import Language.Nominal.Nom
+import Language.Nominal.Binder
 
 instance Arbitrary r => Arbitrary (Input r) where
     arbitrary = Input <$> arbitrary <*> arbitrary

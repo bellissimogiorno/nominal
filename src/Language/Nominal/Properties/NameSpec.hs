@@ -4,7 +4,8 @@ module Language.Nominal.Properties.NameSpec
 import Test.QuickCheck
 
 import Language.Nominal.Name
-import Language.Nominal.Nom
+-- import Language.Nominal.Nom
+import Language.Nominal.Binder
 
 -- $setup
 -- >>> :set -XScopedTypeVariables

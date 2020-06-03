@@ -38,5 +38,3 @@ spec = do
     it "If two chunks are apart, they can be validly combined" $ property prop_apart_is_valid_ch 
     it "If two chunks are apart, they can be validly commuted" $ property prop_chunk_apart_commutes
     it "Lemma 2.14(2)" $ property prop_validity_fresh 
-
-

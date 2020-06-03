@@ -20,7 +20,6 @@ This module contains functions for manipulating lists of representatives which r
            , InstanceSigs          
            , MultiParamTypeClasses 
            , PartialTypeSignatures 
-           , PolyKinds             
            , ScopedTypeVariables   
            , TypeOperators         
 #-}
@@ -58,12 +57,12 @@ module Language.Nominal.Equivar
     ) where
 
 import qualified Data.Map.Strict          as DM -- for unifyPerm 
--- import           Data.Maybe               (fromMaybe)
 import           Data.List                as L
 import           Data.Proxy               (Proxy (..))
 import qualified Data.Set                 as Set (fromList,empty) 
 import           GHC.Generics
 import           Type.Reflection
+import           Data.Type.Equality       -- for testEquality
 
 import           Language.Nominal.Name
 import           Language.Nominal.NameSet
@@ -108,7 +107,7 @@ We will build:
 -}
 
 
--- | @'KEvFun' k a b@ is just @a -> b@ in a wrapper.  
+-- | @'KEvFun' s a b@ is just @a -> b@ in a wrapper.  
 -- But, we give this wrapped function trivial swapping and support.  (For a usage example see the source code for 'Language.Nominal.Examples.IdealisedEUTxO.Val'.) 
 --
 -- Functions need not be finite and are not equality types in general, so we cannot computably test that the actual function wrapped by the programmer actually /does/ have a trivial swapping action (i.e. really is equivariant).  
@@ -116,13 +115,17 @@ We will build:
 -- It's the programmer's job to only insert truly equivariant functions here.  Non-equivariant elements may lead to incorrect runtime behaviour.  
 --
 -- On an equivariant orbit-finite type, the compiler can step in with more stringent guarantees.  See e.g. 'KEvFinMap'. 
-newtype KEvFun k a b = EvFun { runEvFun :: a -> b -- ^ Function in a wrapper 
+newtype KEvFun s a b = EvFun { runEvFun :: a -> b -- ^ Function in a wrapper 
                              }
 
-instance KSwappable k (KEvFun k a b) where
-   kswp _ _ a = a
-instance (Typeable s, KSwappable k a, KSwappable k b) => KSupport (s :: k) (KEvFun k a b) where
-   ksupp _ _ = Set.empty
+instance (Typeable s, Swappable a, Swappable b) => Swappable (KEvFun s a b) where
+   kswp (a1 :: KAtom t) (a2 :: KAtom t) (EvFun f) = 
+      case testEquality (typeRep :: TypeRep t) (typeRep :: TypeRep s) of  
+         Just Refl  -> EvFun f   -- s and t are the same type
+         Nothing    -> EvFun $ kswp a1 a2 f
+
+instance (Typeable s, Swappable a, Swappable b) => KSupport s (KEvFun s a b) where
+   ksupp _ _ = Set.empty   
                               
 -- | @'Tom'@-equivariant function-space
 type EvFun = KEvFun Tom
@@ -228,17 +231,17 @@ Values of @'KEvFinMap'@ must be constructed using
 -}
 
 -- | A type for orbit-finite equivariant maps.
-data KEvFinMap (s :: k) a b = DefAndRep (Nameless b) [(a, Nameless b)]  
-    deriving (Show, Generic, KSwappable k)
+data KEvFinMap s a b = DefAndRep (Nameless b) [(a, Nameless b)]  
+    deriving (Show, Generic, Swappable)
 
 -- | We insist @a@ and @b@ be @k@-swappable so that the mathematical notion of support (which is based on nominal sets) makes sense.  
 --
 -- Operationally, we don't care: if see something of type @KEvFinMap s a b@, we return @Set.empty@.
-instance (Typeable (s :: k), KSwappable k a, KSwappable k b) => KSupport s (KEvFinMap s a b) where 
+instance (Typeable s, Swappable a, Swappable b) => KSupport s (KEvFinMap s a b) where 
    ksupp _ _ = Set.empty  
 
 -- | @'KEvFinMap'@ at a @'Tom'@.  Thus, a type for orbit-finite @'Tom'@-equivariant maps.
-type EvFinMap a b = KEvFinMap 'Tom a b
+type EvFinMap a b = KEvFinMap Tom a b
 
 
 -- | Equivariant application of an orbit-finite map.  

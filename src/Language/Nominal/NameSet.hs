@@ -25,7 +25,6 @@ Typeclasses and operations having to do with sets of names/atoms, namely:
            , InstanceSigs          
            , MultiParamTypeClasses 
            , PartialTypeSignatures   
-           , PolyKinds               
            , ScopedTypeVariables     
            , StandaloneDeriving      
            , TupleSections         
@@ -52,11 +51,11 @@ module Language.Nominal.NameSet
 
 import           Data.Proxy                 (Proxy (..))
 import           Data.Type.Equality
+import           Type.Reflection
 import           Data.List.NonEmpty         (NonEmpty)
 import           Data.Set                   (Set)
 import qualified Data.Set                   as S   
 import           GHC.Generics          
-import           Type.Reflection
 
 import           Language.Nominal.Name
 import           Language.Nominal.Utilities
@@ -72,14 +71,15 @@ import           Language.Nominal.Utilities
 --
 -- /Note: This gives 'KSupport' a strictly more specific and structure-directed meaning than the motivating mathematical notion of support, which __does__ work e.g. on function-types./
 --
-class (Typeable s, KSwappable k a) => KSupport (s :: k) a where   
+class (Typeable s, Swappable a) => KSupport s a where   
     ksupp :: proxy s -> a -> Set (KAtom s)
     default ksupp :: (Generic a, GSupport s (Rep a)) => proxy s -> a -> Set (KAtom s)
     ksupp _ = gsupp . from
 
--- | A ''Tom' instance of 'KSupport'. 
-type Support a = KSupport 'Tom a
+-- | A 'Tom' instance of 'KSupport'. 
+type Support a = KSupport Tom a
 
+-- | A 'Tom' instance of 'ksupp'. 
 supp :: Support a => a -> Set Atom
 supp = ksupp atTom
 
@@ -91,12 +91,12 @@ deriving via Nameless Char instance Typeable s => KSupport s Char
 deriving via Nameless Int  instance Typeable s => KSupport s Int
 
 -- order: nameless, tuple, list, nonempty list, maybe, sum, atom, name, nom, abs 
-instance (Typeable (s :: k), Typeable (t :: k)) => KSupport s (KAtom t) where  -- We need s and t to both have kind k so that testEquality will work.  testEquality can only compare two types of the same kind. 
+instance (Typeable s, Typeable t) => KSupport s (KAtom t) where  -- We need s and t to both have kind k so that testEquality will work.  testEquality can only compare two types of the same kind. 
     ksupp _ a = case testEquality (typeRep :: TypeRep s) (typeRep :: TypeRep t) of
         Nothing   -> S.empty
         Just Refl -> S.singleton a
-instance (Typeable (s :: k), Typeable (u :: k), KSupport s t) => KSupport s (KName u t) where
-   ksupp p a = (ksupp p $ nameAtom a) `S.union` (ksupp p $ nameLabel a) 
+instance (Typeable s, Typeable u, KSupport s t) => KSupport s (KName u t) where
+   ksupp p a = ksupp p $ (nameAtom a, nameLabel a)
 -- instance {-# OVERLAPPABLE #-} (Foldable f, KSupport s a) => KSupport s (f a) where
 --    supp = foldMap supp -- No good: causes Ambiguity warnings; and incorrect on pairs, which are foldable but by action on second component.
 instance KSupport s a => KSupport s (Maybe a)
@@ -143,16 +143,16 @@ namePoint = atomPoint . nameAtom
 -- > atms `apart` x ==> restrict atms x == x
 --
 -- The canonical instance of @'KRestrict'@ is @'Language.Nominal.Nom.Nom'@.
--- The @'KSwappable'@ constraint is not necessary for the code to run, but in practice wherever we use @'KRestrict'@ we expect the type to have a swapping action.
+-- The @'Swappable'@ constraint is not necessary for the code to run, but in practice wherever we use @'KRestrict'@ we expect the type to have a swapping action.
 --
 -- /Note for experts:/ We may want @'KRestrict'@ without @'KSupport'@, for example to work with @Nom (Atom -> Atom)@. 
 --
 -- /Note for experts:/ Restriction is familiar in general terms (e.g. pi-calculus restriction).  In a nominal context, the original paper is <https://dl.acm.org/doi/10.1145/1069774.1069779 nominal rewriting with name-generation> (<http://gabbay.org.uk/papers.html#nomrng author's pdf>), and this has a for-us highly pertinent emphasis on unification and rewriting. 
-class (Typeable s, KSwappable k a) => KRestrict (s :: k) a where
+class (Typeable s, Swappable a) => KRestrict s a where
    restrict  :: [KAtom s] -> a -> a   
 
--- | Instance of 'KRestrict' on a ''Tom'.
-type Restrict = KRestrict 'Tom
+-- | Instance of 'KRestrict' on a 'Tom'.
+type Restrict = KRestrict Tom
 
 -- | Form of restriction that takes names instead of atoms.  Just discards name labels and calls @'restrict'@.
 restrictN :: KRestrict s a => [KName s t] -> a -> a
@@ -164,20 +164,20 @@ instance Typeable s => KRestrict s (Nameless a) where
    restrict _ = id
 
 deriving via Nameless Bool instance Typeable s => KRestrict s Bool
-deriving via Nameless Int instance Typeable s => KRestrict s Int
-deriving via Nameless () instance Typeable s => KRestrict s ()
+deriving via Nameless Int  instance Typeable s => KRestrict s Int
+deriving via Nameless ()   instance Typeable s => KRestrict s ()
 deriving via Nameless Char instance Typeable s => KRestrict s Char
 
 -- | Restriction is monadic on Maybe 
-instance (Typeable s, KRestrict s a) => KRestrict s (Maybe a) where
+instance KRestrict s a => KRestrict s (Maybe a) where
   restrict atms a = restrict atms <$> a
 -- | On lists, Restrict traverses the list and eliminate elements for which any of the @atms@ are in the support.  
 --
 -- A alternative is to assume restriction on the underlying elements and restrict pointwise.  The elimination choice seems more useful in practice. 
-instance (Typeable s, KSupport s a) => KRestrict s [a] where
+instance KSupport s a => KRestrict s [a] where
    restrict atms as = filter (kapart (Proxy :: Proxy s) atms) as
 -- | Eliminate elements for which any of the @atms@ are in the support
-instance (Typeable s, Ord a, KSupport s a) => KRestrict s (S.Set a) where
+instance (Ord a, KSupport s a) => KRestrict s (S.Set a) where
    restrict atms as = S.filter (kapart (Proxy :: Proxy s) atms) as
 
 

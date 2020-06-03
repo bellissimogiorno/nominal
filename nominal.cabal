@@ -21,10 +21,12 @@ library
       Language.Nominal.Utilities
       Language.Nominal.Name
       Language.Nominal.Nom
+      Language.Nominal.Binder
       Language.Nominal.Abs
       Language.Nominal.Sub
       Language.Nominal.NameSet
       Language.Nominal.Unify
+      Language.Nominal.Unique
       Language.Nominal.Equivar
       Language.Nominal.Examples.SystemF
       Language.Nominal.Examples.IdealisedEUTxO
@@ -40,6 +42,7 @@ library
       Language.Nominal.Properties.AbsSpec
       Language.Nominal.Properties.SubSpec
       Language.Nominal.Properties.UnifySpec
+      Language.Nominal.Properties.UtilitiesSpec
       Language.Nominal.Properties.EquivarSpec
       Language.Nominal.Properties.Examples.IdealisedEUTxOSpec
       Language.Nominal.Properties.Examples.SystemFSpec
@@ -47,15 +50,18 @@ library
   hs-source-dirs:
       src
   build-depends:
-      QuickCheck
-    , Unique
-    , algebra
-    , base >=4.7 && <5
-    , containers
-    , extra
-    , finite-typelits >= 0.1.4.2
-    , data-default
-    , flow
+    QuickCheck                        >= 2.11.3 && < 2.13.3,
+    containers                        >= 0.5.11 && < 0.6.3,
+    Unique                            >= 0.4.7 && < 0.5,
+    extra                             >= 1.6.9 && < 1.7,
+    algebra                           >= 4.3.1 && < 4.4,
+    data-default                      >= 0.7.1 && < 0.8,
+    finite-typelits                   >= 0.1.4 && < 0.2,
+    flow                              >= 1.0.20 && < 1.1,
+    syb                               >= 0.7 && < 0.8,
+    base                              >= 4.7 && <5,
+    TypeCompose
+  --  streams
   default-language: Haskell2010
   ghc-options: -Wall -Werror
 
@@ -69,6 +75,7 @@ test-suite nominal-test
     , Language.Nominal.AbsSpec
     , Language.Nominal.SubSpec
     , Language.Nominal.UnifySpec
+    , Language.Nominal.UtilitiesSpec
     , Language.Nominal.EquivarSpec
     , Language.Nominal.Examples.SystemFSpec
     , Language.Nominal.Examples.IdealisedEUTxOSpec
@@ -77,11 +84,11 @@ test-suite nominal-test
   ghc-options: -Wall -Werror
   build-depends:
       base >=4.7 && <5
+    , data-default
     , hspec
     , hspec-discover
     , nominal
     , QuickCheck
-    , data-default
   default-language: Haskell2010
 
 test-suite nominal-doctest

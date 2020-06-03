@@ -22,17 +22,17 @@ See "Language.Nominal.Examples.SystemF" for usage examples.
            , InstanceSigs          
            , MultiParamTypeClasses 
            , PartialTypeSignatures   
-           , PolyKinds               
            , StandaloneDeriving      
            , TupleSections         
            , TypeOperators         
 #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-} -- Suppress orphan instance of BinderConc instance of KAbs.
+
 module Language.Nominal.Sub
    ( -- * Substitution
      KSub (..)
    , Sub
-   , subApp, appSub
    -- * Test
    -- $test
    ) 
@@ -43,7 +43,7 @@ import Type.Reflection
 import Data.List.NonEmpty (NonEmpty)
 
 import Language.Nominal.Name 
-import Language.Nominal.Nom
+import Language.Nominal.Binder
 import Language.Nominal.Abs
 
 -- * Substitution
@@ -58,7 +58,7 @@ class KSub n x y where
     sub n x = to . gsub n x . from
 
 -- | Canonical instance for the unit atom sort
-type Sub n x y = KSub (KName 'Tom n) x y
+type Sub n x y = KSub (KName Tom n) x y
 
 
 -- order: nameless, tuple, list, nonempty list, maybe, sum, nom 
@@ -83,23 +83,33 @@ instance (KSub n x a, KSub n x b) => KSub n x (Either a b)
 
 
 -- | sub on names
-instance KSub (KName s n) (KName s n) (KName s n) where -- We could legitimately insist on Typeable (s :: k), KSwappable k n, Eq n here, but we do not because names are compared for equality by atom.
+instance KSub (KName s n) (KName s n) (KName s n) where -- We could legitimately insist on Typeable s, Swappable n, Eq n here, but we do not because names are compared for equality by atom.
    sub n n' a = if a == n then n' else a 
 
-
 -- | Nameless form of substitution, where the name for which we substitute is packaged in a @'KAbs'@ abstraction. 
-subApp :: KSub (KName s n) x y => KAbs (KName s n) y -> x -> y
+instance {-# INCOHERENT #-} (Typeable s, Swappable n, Swappable x, Swappable y, KSub (KName s n) x y) => BinderConc (KAbs (KName s n) y) (KName s n) y s x where  -- may be overlapped by the native `conc` name instance of KAbs.  If in doubt, favour the native version.  This may change.
+   conc y' x = y' @@! \n -> sub n x  
+ 
+
+{-- | Nameless form of substitution, where the name for which we substitute is packaged in a @'KAbs'@ abstraction. 
+subApp :: (Typeable s, Swappable n, Swappable x, Swappable y, KSub (KName s n) x y) => KAbs (KName s n) y -> x -> y
 subApp y' x = y' @@! \n -> sub n x -- flip sub x 
 -- | Nameless form of substitution, where the name for which we substitute is packaged in a @'KAbs'@ abstraction ('flip'ped version). 
-appSub :: KSub (KName s n) x y => x -> KAbs (KName s n) y -> y
-appSub = flip subApp
+appSub :: (Typeable s, Swappable n, Swappable x, Swappable y, KSub (KName s n) x y) => x -> KAbs (KName s n) y -> y
+appSub = flip subApp --}
 
 
 -- | sub on a nominal abstraction substitutes in the label, and substitutes capture-avoidingly in the body
-instance (Typeable (s :: k), Typeable (u :: k), KSub (KName s n) x t, KSub (KName s n) x y, KSwappable k t, KSwappable k y) => 
+instance (Typeable s, Typeable u, KSub (KName s n) x t, KSub (KName s n) x y, Swappable t, Swappable y) => 
             KSub (KName s n) x (KAbs (KName u t) y) where
-  sub n x = genApp $ \n' y -> abst (sub n x <$> n') $ sub n x y 
+  sub n x = genApp $ \n' y -> (sub n x <$> n') @> sub n x y 
 
+-- | Placeholder for future development.  A general maths behind this definition is given in Section 8.1 of <https://dl.acm.org/doi/10.1145/2700819 Semantics Out Of Context> (<http://gabbay.org.uk/papers.html#semooc author's pdf>).
+instance Eq n => KSub n ((n -> a) -> a) (n -> a) where
+   sub n x ctx n' = if n' == n then x ctx else ctx n'
+-- | Placeholder for future development.  A general maths behind this definition is given in Section 8.1 of <https://dl.acm.org/doi/10.1145/2700819 Definition 8.12 of Semantics Out Of Context> (<http://gabbay.org.uk/papers.html#semooc author's pdf>).
+instance Eq n => KSub n ((n -> a) -> a) ((n -> a) -> a) where
+   sub n x x' ctx = x' (sub n x ctx)
 
 -- * Generics support for @'KSub'@
 
