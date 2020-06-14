@@ -72,7 +72,7 @@ import           Language.Nominal.Unify
 
 -- $setup
 -- >>> :m +Language.Nominal.Nom
--- >>> let [a, b, c] = genUnNom $ freshAtoms [(), (), ()]
+-- >>> let [a, b, c] = exit $ freshAtoms [(), (), ()]
 
 
 {- $intro
@@ -274,7 +274,7 @@ constEvFinMap b = DefAndRep (Nameless b) []
 -- >>> (extEvFinMap 'x' 7 $ (constEvFinMap 42 :: EvFinMap Char Int)) $$ 'y'
 -- 42
 --
--- >>> let [m, n, o] = genUnNom $ freshNames [(), (), ()] 
+-- >>> let [m, n, o] = exit $ freshNames [(), (), ()] 
 -- >>> m == n
 -- False
 -- >>> unifiablePerm m n

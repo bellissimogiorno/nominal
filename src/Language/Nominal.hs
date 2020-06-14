@@ -54,6 +54,7 @@ import Language.Nominal.Unify
 * "Language.Nominal.Examples.UntypedLambda": Untyped lambda-calculus syntax and reductions (short example). 
 * "Language.Nominal.Examples.Assembly1": A simple assembly language, with binding (short example). 
 * "Language.Nominal.Examples.Assembly2": A simple assembly language, with binding and a swap-variable primitive (short example). 
+* "Language.Nominal.Examples.Style": Some basic comments on recommended programming style using this package. 
 * "Language.Nominal.Examples.SystemF": System F syntax and reductions (longer example). 
 * "Language.Nominal.Examples.IdealisedEUTxO": A EUTxO-style blockchain system, following the ideas in <https://arxiv.org/abs/2003.14271 mathematical idealisation of the Extended UTxO model> (longer example). 
 

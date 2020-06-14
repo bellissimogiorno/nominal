@@ -15,7 +15,7 @@ Helper functions
            , MultiParamTypeClasses 
            , FlexibleContexts      
            , TupleSections         
-           , PartialTypeSignatures 
+           , PartialTypeSignatures
 #-}  
 
 module Language.Nominal.Utilities 
@@ -28,7 +28,6 @@ import           Data.List.NonEmpty (NonEmpty (..))
 import           GHC.Stack          (HasCallStack)
 import           Control.Monad      (guard) 
 
--- * Utilities
 
 rewrite :: (Typeable a, Data b) => (a -> Maybe a) -> b -> b
 rewrite f b = case cast b of

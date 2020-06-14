@@ -24,7 +24,6 @@ Unification by permutation
            , InstanceSigs               
            , MultiParamTypeClasses      
            , PartialTypeSignatures        
-           -- , PolyKinds                    
            , ScopedTypeVariables        
            , StandaloneDeriving         
            , TupleSections              

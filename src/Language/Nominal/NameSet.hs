@@ -91,7 +91,7 @@ deriving via Nameless Char instance Typeable s => KSupport s Char
 deriving via Nameless Int  instance Typeable s => KSupport s Int
 
 -- order: nameless, tuple, list, nonempty list, maybe, sum, atom, name, nom, abs 
-instance (Typeable s, Typeable t) => KSupport s (KAtom t) where  -- We need s and t to both have kind k so that testEquality will work.  testEquality can only compare two types of the same kind. 
+instance (Typeable s, Typeable t) => KSupport s (KAtom t) where  
     ksupp _ a = case testEquality (typeRep :: TypeRep s) (typeRep :: TypeRep t) of
         Nothing   -> S.empty
         Just Refl -> S.singleton a

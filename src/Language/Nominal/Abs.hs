@@ -152,7 +152,7 @@ absLabel = nameLabel . absName
 -- | Acts on an abstraction @x'@ by unpacking @x'@ as @(n,x)@ for a fresh name @n@, and calculating @f n x@.
 instance (Typeable s, Swappable t, Swappable a) => Binder (KAbs (KName s t) a) (KName s t) a s where
    (@@) :: KAbs (KName s t) a -> (KName s t -> a -> b) -> KNom s b
-   (@@) x' f = atFresh (absLabel x') $ \n -> f n $ x' `absApp` n
+   (@@) x' f = freshKName (absLabel x') @@ \_ n -> f n $ x' `absApp` n
    (@>) :: KName s t -> a -> KAbs (KName s t) a
    (@>) nam a = AbsWrapper nam $ \nam' -> kswpN nam' nam a
 
@@ -203,7 +203,8 @@ instance Default t => Applicative (KAbs (KName s t)) where -- use typeclass cons
 
 -- | Apply f to a fresh element with label @t@
 absFresh :: (Typeable s, Swappable t, Swappable a) => t -> (KName s t -> a) -> KAbs (KName s t) a
-absFresh t f = genUnNom . atFresh t $ \m -> m @> f m
+absFresh t f = freshKName t @@! \_ m -> m @> f m  -- It's OK to use '@@!' and release the bound ID, because we know it's bound in the result.
+--- absFresh t f = genUnNom . atFresh t $ \m -> m @> f m
 
 -- | Apply f to a fresh element with default label 
 absFresh' :: (Typeable s, Swappable t, Swappable a, Default t) => (KName s t -> a) -> KAbs (KName s t) a

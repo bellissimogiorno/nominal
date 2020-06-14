@@ -407,7 +407,7 @@ txListToChunk = foldMap singletonChunk -- relies on Monoid action on Maybe Chunk
 -- * Returns @'Nothing'@ if the transaction list doesn't form a valid @'Chunk'@.
 nomTxListToNomChunk :: (HasCallStack, Validator r d v) 
    => Nom [Transaction r d v] -> Maybe (Nom (Chunk r d v))
-nomTxListToNomChunk ntxs = transposeNomMaybe $ txListToChunk <$> ntxs  
+nomTxListToNomChunk ntxs = transposeMF $ txListToChunk <$> ntxs  
 
 -- | Combines a list of transactions in a binding context, into a Chunk, with a check that no excess positions are bound.  Returns Nothing if check fails.
 nomTxListToChunk :: (HasCallStack, Validator r d v) 
@@ -612,7 +612,7 @@ chunkLength = resAppC L.length
 
 -- | Calculate the head of a chunk.  
 chunkHead :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Nom (Transaction r d v))
-chunkHead ch = transposeNomMaybe $ nomAppC safeHead ch 
+chunkHead ch = transposeMF $ nomAppC safeHead ch 
 
 
 -- | Calculate the tail of a chunk.  Two monads here:
@@ -621,8 +621,8 @@ chunkHead ch = transposeNomMaybe $ nomAppC safeHead ch
 --
 -- * @'Nom'@ ... to bind the names of any positions in newly-exposed UTxOs.
 chunkTail :: (UnifyPerm r, UnifyPerm d, Validator r d v) => Chunk r d v -> Maybe (Nom (Chunk r d v))
-chunkTail ch = transposeNomMaybe $ nomAppC ((=<<) txListToChunk . safeTail) ch 
--- chunkTail ch = transposeNomMaybe $ nomAppC (\txs -> safeTail txs >>= txListToChunk) ch 
+chunkTail ch = transposeMF $ nomAppC ((=<<) txListToChunk . safeTail) ch 
+-- chunkTail ch = transposeMF $ nomAppC (\txs -> safeTail txs >>= txListToChunk) ch 
 
 
 -- | Compare the code for this function with the code for @'chunkTail'@.  
@@ -655,13 +655,13 @@ reverseTxsOf = nomTxListToChunk . nomAppC L.reverse
 
 -- | Split a chunk into a head and a tail.
 chunkToHdTl :: Validator r d v => Chunk r d v -> Maybe (Nom (Transaction r d v, Chunk r d v))
-chunkToHdTl (Chunk x') = transposeNomMaybe $ x' @@ \_ x -> case x of
+chunkToHdTl (Chunk x') = transposeMF $ x' @@ \_ x -> case x of
    (tx:txs) -> return (tx, fromJust $ txListToChunk txs)
    []       -> Nothing
 
 -- | Split a chunk into a head and a head and a tail.
 chunkToHdHdTl :: Validator r d v => Chunk r d v -> Maybe (Nom (Transaction r d v, Transaction r d v, Chunk r d v))
-chunkToHdHdTl (Chunk x') = transposeNomMaybe $ x' @@ \_ x -> case x of
+chunkToHdHdTl (Chunk x') = transposeMF $ x' @@ \_ x -> case x of
    (tx1:tx2:txs) -> return (tx1, tx2, fromJust $ txListToChunk txs)
    _             -> Nothing
 

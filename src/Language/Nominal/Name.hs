@@ -215,7 +215,13 @@ type KPerm s = [(KAtom s, KAtom s)]
 -- | A permutation at @'Tom'@.
 type Perm = KPerm Tom
 
--- | A permutation acts as a list of swappings
+-- | A permutation acts as a list of swappings.  Rightmost/innermost swapping acts first.
+--
+-- >>> a <- freshAtomIO 
+-- >>> b <- freshAtomIO
+-- >>> c <- freshAtomIO
+-- >>> perm [(c,b), (b,a)] a == c
+-- True 
 perm :: (Typeable s, Swappable a) => KPerm s -> a -> a          
 perm = chain . map (uncurry kswp)  
 
@@ -311,9 +317,6 @@ deriving via Nameless Int  instance Swappable Int
 deriving via Nameless ()   instance Swappable ()
 deriving via Nameless Char instance Swappable Char
 
--- | A smallish nameless type
--- data Smallish = SmallA | SmallB | SmallC | SmallD | SmallE
--- deriving via Nameless Smallish instance Swappable Smallish 
 
 -- * Generics support for @'KSwappable'@
 

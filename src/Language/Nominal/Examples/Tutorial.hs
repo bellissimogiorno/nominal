@@ -464,7 +464,7 @@ Wait, we can explain!
 
 * We get "Data.Map" on name-types, again even if the labels lack 'Eq' or 'Ord'.
  
-* Why have multiple instances of one atomic ID labelled with different tags?  If you must, you can, but then it's up to you to track which label (or combination of labels) is "right".  This package makes it easy to create fresh atoms, so if required, it's easy to create multiple fresh atoms and give a distinct label to each.
+* Have you considered why you're asking for this?  A name is an atomic ID tagged with information, and one atom occurring associated to multiple tags is like one license plate number on multiple cars; that's /not/ what /unique/ identifiers are meant for.  Or if you must do this, you can, but then it's up to you to keep track of which label (or combination of labels) is "true".  This package makes it easy to create fresh atoms, so perhaps you'd be better off creating multiple fresh atoms and giving a distinct label to each one.
 
 
 -}

@@ -33,3 +33,8 @@ spec = do
     it  "two notions of trivial Nom binding are equal" $ property prop_isTrivial_equal 
     it  "isTrivial sanity check (supp version)" $ property prop_isTrivial_sane 
     it  "isTrivial sanity check (freshFor version)" $ property prop_isTrivial_sane' 
+    it "Commute Nom and List" $ property prop_transposeNomList 
+    it "Commute Nom and Nom (one way)" $ property prop_transposeNomNom 
+--    it "Commute List and Nom" $ property prop_transposeListNom 
+--    it "Commute Nom and Nom (the other way)" $ property prop_transposeNomNom' 
+--    it "Commute Nom and Nom (two types of atom)" $ property prop_transposeNomNom'' 

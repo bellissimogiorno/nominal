@@ -38,8 +38,6 @@ module Language.Nominal.Binder
    ( -- * The @'Binder'@ typeclass
      -- $binder
        Binder (..), (@@!), (@@.), pattern (:@@!), nomApp, nomAppC, genApp, genAppC, resApp, resAppC, resAppC'
-      -- * Variants on 'res'
-     , kres, resN
      -- * @'new'@ quantifier
      , newA, new, freshForA, freshFor
      -- * Detecting trivial @'KNom'@s, that bind no atoms in their argument
@@ -135,7 +133,7 @@ infixr 1 @>
 
 -- | Use this to map a binder to a type @b@, generating fresh atoms for any local bindings, and allowing them to escape.
 (@@!) :: Binder ctxbody ctx body s => ctxbody -> (ctx -> body -> b) -> b
-(@@!) = genUnNom .: (@@)
+(@@!) = exit .: (@@)
 infixr 9 @@!
 
 -- | This pattern is not quite as useful as it could be, because it's too polymorphic to use a COMPLETE pragma on.  You can use it, but you may get incomplete pattern match errors.
@@ -147,19 +145,11 @@ infixr 0 :@@!
 
 -- | Acts on a 'KNom' binder by applying a function to the body and the context of locally bound names.  Local names are preserved.
 instance (Typeable s, Swappable a) => Binder (KNom s a) [KAtom s] a s where
-   -- | Destroy a 'KNom' binder by generating fresh IDs for the atoms.  This is all bound inside the IO monad.
    (@@) :: KNom s a -> ([KAtom s] -> a -> b) -> KNom s b
-   x' @@ f = Nom $ do -- IO monad
-      (atms, x) <- nomToIO x'
-      return (atms, f atms x)
-   -- | Given a list of names and a datum 'a', generate fresh versions of the atoms and freshen them in 'a'.
-   -- The effect is to wrap 'a' in a binding context.
-   --
-   -- We need swappings to do this.
+   (@@) = pami . reRes -- the @reRes@ ensures capture-avoidance, in case the input binding was formed using 'enter' instead of 'res'.
+   -- (@@) a' f = imap f $ withExit a' res   -- flip imap 
    (@>) :: (Typeable s, Swappable a) => [KAtom s] -> a -> KNom s a
-   atms @> a = do -- Nom monad
-      atms' <- freshKAtoms atms
-      return $ perm (zip atms' atms) a
+   (@>) = res
 
 -- | Use this to map a binder to a type @b@ with its own notion of restriction.  Bindings do not escape.
 (@@.) :: (Binder ctxbody ctx body s, KRestrict s b) => ctxbody -> (ctx -> body -> b) -> b
@@ -200,7 +190,7 @@ resApp = flip (@@.)
 -- | Unpacks a binder and maps to a type with its own @'restrict'@ operation.
 -- Local bindings are not examined, and get carried over and @'restrict'@ed in the target type.
 --
--- A common type instance is @(a -> Bool) -> KNom s a -> Bool@, in which case 'resAppC' acts to capture-avoidingly apply a predicate under a binder, and return the relevant truth-value.  See for example the code for 'transposeNomMaybe'.
+-- A common type instance is @(a -> Bool) -> KNom s a -> Bool@, in which case 'resAppC' acts to capture-avoidingly apply a predicate under a binder, and return the relevant truth-value.  See for example the code for 'transposeNomFunc'.
 --
 -- 'resAppC' = 'resApp' . 'const'
 resAppC :: (Binder ctxbody ctx body s, KRestrict s b) => (body -> b) -> ctxbody -> b
@@ -217,14 +207,10 @@ resAppC' = flip resAppC
 -- * Variants on 'res'
 
 
--- | A version of '@>' (@res@) that accepts a proxy to explicitly specify the type of atoms.
+{-- | A version of '@>' (@res@) that accepts a proxy to explicitly specify the type of atoms.
 kres :: (Typeable s, Swappable body, Binder ctxbody ctx body s) => proxy s -> ctx -> body -> ctxbody
 kres _ = (@>)
-
--- | A version of 'res' on 'Nom' that takes names, not atoms (it just strips the labels of the names and acts on their atoms).
-resN :: (Typeable s, Swappable a) => [KName s t] -> a -> KNom s a
-resN = (@>) . fmap nameAtom
-
+--}
 
 
 
@@ -367,9 +353,9 @@ instance (Typeable s, Swappable a, KRestrict s a) => BinderConc (KNom s a) [KAto
 -- | Suppose we have a nominal abstraction @x' :: KNom s a@.
 -- Then @x' `conc` (Proxy :: Proxy s)@ triggers an IO action to strip the 'KNom' context and concrete @x'@ at some choice of fresh atoms.  
 --
--- > cnoc (Proxy :: Proxy s) = genUnNom
+-- > cnoc (Proxy :: Proxy s) = exit 
 instance (Typeable s, Swappable a) => BinderConc (KNom s a) [KAtom s] a s (Proxy s) where
-   cnoc = const genUnNom
+   cnoc = const exit 
 
 -- | Concrete a nominal abstraction at a particular list of atoms.
 -- Dangerous for two reasons:

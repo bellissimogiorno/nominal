@@ -153,7 +153,7 @@ fixChunkToBlockchain chunk
        -- generate an arbitrary output for each utxc /first/ 
        os' <- replicateM (resAppC length utxcsCh') arbitrary -- :: Gen (Output d v) 
        -- and only /then/ unpack the list of utxcs.  Fresh atoms generated are for input-output bindings and should not interfere with atoms in os' 
-       let cs = genUnNom $ utxcsCh' 
+       let cs = exit $ utxcsCh' 
        -- fix each output so it matches the relevant utxc.
        let os = map (uncurry fixOutput) (zip cs os')  
        -- make genesis block
@@ -292,7 +292,8 @@ prop_chunkTail_is_prefix ch = chunkLength ch > 0 ==> isPrefixChunk (fromJust $ c
 
 -- | The tail of a chunk, generating fresh atoms if required 
 genChunkTail :: (UnifyPerm r, UnifyPerm d, UnifyPerm v, Validator r d v) => Chunk r d v -> Maybe (Chunk r d v)
-genChunkTail ch = fmap genUnNom $ chunkTail ch
+genChunkTail = fmap exit . chunkTail 
+-- genChunkTail ch = fmap genUnNom $ chunkTail ch
 
 -- | The tail of a chunk, is a prefix of the original chunk.  Gotcha version, that doesn't have the Nom bindings: expect failure here.
 prop_chunkTail_is_prefix_gotcha :: TC -> Property 
