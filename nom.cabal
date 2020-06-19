@@ -1,5 +1,5 @@
-cabal-version: 1.12
-name:           nominal
+cabal-version:  2.0
+name:           nom
 version:        0.1.0.0
 description:    Nominal-flavoured implementation of data in a context of local names, following the ideas in <https://link.springer.com/article/10.1007/s001650200016 a new approach to abstract syntax with variable binding> (see also <http://www.gabbay.org.uk/papers.html#newaas-jv author's pdfs>).
                 __The recommended landing page is "Language.Nominal", so please go there first.__ See also: a tutorial in "Language.Nominal.Examples.Tutorial"; a short development of untyped lambda-calculus in "Language.Nominal.Examples.UntypedLambda"; an example development of System F in "Language.Nominal.Examples.SystemF"; and an example development of an EUTxO-style blockchain in "Language.Nominal.Examples.IdealisedEUTxO".
@@ -10,11 +10,19 @@ maintainer:     murdoch.gabbay@gmail.com
 copyright:      2020 Murdoch J. Gabbay
 license:        BSD3
 license-file:   LICENSE
-build-type:     Simple
+build-type:     Custom
+category:       Language, Compilers/Interpreters
+synopsis:       Name-binding & alpha-equivalence
+ 
+custom-setup
+  setup-depends:
+      base
+    , Cabal
+    , cabal-doctest >=1.0.6 && <1.1
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/nominal
+  location: https://github.com/bellissimogiorno/nominal
 
 library
   exposed-modules:
@@ -64,9 +72,10 @@ library
     base                              >= 4.7 && <5,
     TypeCompose                       >= 0.9.14 && < 0.10
   default-language: Haskell2010
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall 
+               -- -Werror
 
-test-suite nominal-test
+test-suite nom-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
@@ -82,24 +91,28 @@ test-suite nominal-test
     , Language.Nominal.Examples.IdealisedEUTxOSpec
   hs-source-dirs:
       test
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall 
+               -- -Werror
   build-depends:
       base >=4.7 && <5
     , data-default
     , hspec
-    , hspec-discover
-    , nominal
+    , nom
     , QuickCheck
+  build-tool-depends:
+      hspec-discover:hspec-discover
   default-language: Haskell2010
 
-test-suite nominal-doctest
-  type: exitcode-stdio-1.0
-  main-is: DocTest.hs
+test-suite nom-doctest
+  type:             exitcode-stdio-1.0
+  main-is:          DocTest.hs
   hs-source-dirs:
       doctest
-  ghc-options: -Wall -Werror
   build-depends:
-      base >=4.7 && <5
-    , doctest
-    , QuickCheck
+      base
+    , base-compat       >=0.10.5 && <0.12
+    , doctest           >=0.15   && <0.17
+    , nom
+    , template-haskell
+  ghc-options:      -Wall -threaded
   default-language: Haskell2010

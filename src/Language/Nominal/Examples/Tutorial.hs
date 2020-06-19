@@ -98,75 +98,6 @@ type MyNameLabel = String
 type MyName = Name MyNameLabel 
 
 
-{-- a' :: Nom MyName
-a' = freshName "a"
-
-a, b :: MyName
-a = genUnNom a'
-b = genUnNom $ freshName "b"
-
-
-
-__Warning:__ Watch the subscripts; they are the underlying identifiers.
--- They do match up with the display names in this case, but they don't have to in general.
-step12 :: [MyNameLabel]
-step12 = map nameLabel step10swpabc
-
--- The typeclass of all swappable types is called 'Swappable'. 
--- | Swapping applied to the function
-step10swpN :: MyName -> MyName
--- | Apply it to @[a,b,c]@.  Should return @[c,a,b]@
-step10swpabc :: [MyName] 
-step10swpabc = map step10swpN [a, b, c] -- should return @[c,a,b]@
--- | Should return 'True'. 
-step11 :: Bool 
-step11 = step10swpabc == [c, a, b]
--- | WARNING: Watch the subscripts; they are the underlying identifiers.
--- They do match up with the display names in this case, but they don't have to in general.
-step12 :: [MyNameLabel]
-step12 = map nameLabel step10swpabc
-
--- * Interaction of abstraction and functions
-
--- | @a.a@, @b.b@, @a.c@, and @b.c@ are all distinct.
--- But this is only because the abstraction stores the name labels 
--- ("a", "b", "a", and "b" respectively) of the bound name. 
-step15a :: (Bool, Bool)
-step15a = (abst a a == abst b b, abst a c == abst b c)
-
--- | Let's wipe those labels to a default value, and what we do next will be easier
-an :: MyName
-an = nameOverwriteLabel def a
-bn :: MyName
-bn = nameOverwriteLabel def b
-cn :: MyName
-cn = nameOverwriteLabel def c
-
--- | Now note that @a.a == b.b@ and @a.c = b.c@ (up to name labels, which are now reset)
-step15 :: (Bool, Bool)
-step15 = (abst an an == abst bn bn, abst an cn == abst bn cn)
--- | Abstraction is capturing: @(\x -> a.x) a@ should evaluate to @a.a@ 
--- (hlint complains about this and the examples which follow, because 
--- the left-hand side is just an eta-conversion.  However,
---  that's the point: names are bound as if name-binding was just a pair of a name and a datum.) 
-step16 :: Bool
-step16 = (\x -> abst an x) an == abst an an 
--- | Thus @\x -> a.x@ and @\x -> b.x@ are not equal (the latter evalutes to @b.a@ on @a@).
-step17 :: Bool
-step17 = (\x -> abst an x) an == (\x -> abst bn x) an
--- | We can abstract in functions.
--- Consider a program involving @a.(\x -> a.x)@.  
--- The @a@ is abstracted ... in the abstraction function @\x -> a.x@.
--- So @a.(\x -> a.x)@ concreted at 'b' is @(\x -> b.x)@.
-step18 :: Bool
-step18 = ( (conc (abst an (\x -> abst an x)) an) an 
-         , (conc (abst an (\x -> abst an x)) bn) an 
-         ) == (abst an an, abst bn an)          
-
-theEnd :: Bool
-theEnd = True
---}
- 
 {- $setup
 
   
@@ -183,18 +114,29 @@ theEnd = True
    This is because evaluation is lazy, so two copies of @a'@ are created in two distinct local name-binding contexts; 
    one to the left of the @'=='@ and the other to the right.
    
-   But we can unpack that context using @'genUnNom'@.  This triggers the computation of actual fresh identifiers for any bindings:
-  
-   >>> let a = genUnNom a' :: MyName
+   But we can unpack name-binding context in (at least) two ways: using 'exit', or using 'nomToIO':
 
-   Is @a == a@?
+   >>> a1 = exit a' :: MyName
+   >>> a2 = exit a' :: MyName
+   >>> a  <- nomToIO a' :: IO MyName
    
+   Both methods trigger the computation of actual fresh identifiers for any bindings.
+   We may prefer 'nomToIO' in this tutorial, just because we're at an interactive prompt, but the code has many examples of the use of 'exit' (which is also a more polymorphic method):
+  
    >>> a == a
    True
+   >>> a1 == a1
+   True
+   >>> a2 == a2
+   True
+   >>> a1 == a2
+   False 
+   >>> a == a1
+   False 
 
-   Yes!  @a@ is just a plain datum, whose name-identifier was generated fresh a moment ago when we invoked @'genUnNom'@.  So if we do this again:
+   @a@ is just a plain datum, whose name-identifier was generated fresh.  So if we do this again:
 
-   >>> let b = genUnNom a' :: MyName
+   >>> b <- nomToIO a' :: IO MyName
    >>> a == b
    False
 
@@ -292,13 +234,13 @@ theEnd = True
    
    Likewise:
    
-   >>> let c = (genUnNom $ freshName "a") :: MyName
+   >>> c <- (nomToIO $ freshName "a") :: IO MyName
    >>> abst b [a, b]  ==  abst c [a, c] 
    True
 
    __Warning:__ The label of the abstracted name is preserved; only its identifier gets alpha-converted.  Thus, this returns false, just because @"a" /= "d"@:
    
-   >>> let d = (genUnNom $ freshName "d") :: MyName
+   >>> d <- (nomToIO $ freshName "d") :: IO MyName
    >>> abst b [a, b]  ==  abst d [a, d] 
    False 
 
@@ -334,7 +276,7 @@ theEnd = True
    Our machinery now pays dividends.  Abstraction is functorial, and capture-avoidance is automagical: 
  
    >>> let aTob = (map $ \n -> if n == a then b else n) :: [MyName] -> [MyName]
-   >>> let c = (genUnNom $ freshName "a") :: MyName
+   >>> c <- (nomToIO $ freshName "a") :: IO MyName
    >>> (aTob <$> abst a [a, b])  ==  abst a [a, b] 
    True
    >>> (aTob <$> abst b [a, b])  ==  abst c [b, c]  
@@ -357,7 +299,7 @@ theEnd = True
 -- * Swapping
 {- $swapping
 
->>> let [a, b, c] = genUnNom $ freshNames ["a", "b", "c"]
+>>> [a, b, c] <- nomToIO $ freshNames ["a", "b", "c"]
 
 We can swap @a@ and @b@ in simple types like lists ...
 
@@ -387,7 +329,7 @@ True
 {- $unify
    Recall @x1@ and @x2@ above; let's reconstruct them here:
 
-   >>> let [a, b] = genUnNom $ freshNames ["a", "b"] 
+   >>> [a, b] <- nomToIO $ freshNames ["a", "b"] 
    >>> let x1 = resN [a,b] (a,a,b) :: Nom (MyName, MyName, MyName)
    >>> let x2 = x1                 :: Nom (MyName, MyName, MyName)
    
@@ -410,7 +352,7 @@ True
 We have a theory of substitution given by a typeclass @'Sub'@ with function @'sub'@.
 This works automatically on simple datatypes (like lists and name-abstractions) and can be extended using typeclasses to more complex datatypes (see "Language.Nominal.Examples.SystemF").
 
->>> [a, b, b', c] = genUnNom $ freshNames [(), (), (), ()] 
+>>> [a, b, b', c] <- nomToIO $ freshNames [(), (), (), ()] 
 >>> sub a b [a,b,c] == [b,b,c]
 True
 >>> (sub a b $ abst b [a,b,c]) == abst b' [b, b', c]
@@ -453,7 +395,7 @@ It is a principle of nominal techniques that /names are data/: pure data should 
 
 __Gotcha:__ Names are compared for equality on their atoms.  Labels are discarded during the equality check:
 
->>> a = genUnNom $ freshName "a" 
+>>> a = exit $ freshName "a" 
 >>> b = a `withLabel` "b"
 >>> a == b
 True

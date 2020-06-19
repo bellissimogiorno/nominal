@@ -130,7 +130,7 @@ isNothingRen = not . isJustRen
 
 -- | Elements of @'KRen'@ are compared for equality on their __nub__ @'renNub'@, meaning just that identity mappings are ignored.
 --
--- >>> a = genUnNom $ freshAtom
+-- >>> a = exit $ freshAtom
 -- >>> idRen == renExtend a a idRen
 -- True 
 instance Eq (KRen s) where

@@ -70,6 +70,7 @@ import Language.Nominal.Unify
 == Related work 
 * <https://hackage.haskell.org/package/bound bound: Making de Bruijn Succ less>
 * <https://hackage.haskell.org/package/unbound unbound: Generic support for programming with names and binders>
+* <https://hackage.haskell.org/package/unbound-generics unbound-generics: Support for programming with names and binders using GHC Generics>
 * <https://hackage.haskell.org/package/nominal nominal: Binders and alpha-equivalence made easy> 
 * <https://www.mimuw.edu.pl/~szynwelski/nlambda/doc/ NLambda: computations over infinite structures using logical formulas and SMT solving>
 

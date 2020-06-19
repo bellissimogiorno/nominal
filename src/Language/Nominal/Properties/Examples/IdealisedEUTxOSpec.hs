@@ -293,7 +293,6 @@ prop_chunkTail_is_prefix ch = chunkLength ch > 0 ==> isPrefixChunk (fromJust $ c
 -- | The tail of a chunk, generating fresh atoms if required 
 genChunkTail :: (UnifyPerm r, UnifyPerm d, UnifyPerm v, Validator r d v) => Chunk r d v -> Maybe (Chunk r d v)
 genChunkTail = fmap exit . chunkTail 
--- genChunkTail ch = fmap genUnNom $ chunkTail ch
 
 -- | The tail of a chunk, is a prefix of the original chunk.  Gotcha version, that doesn't have the Nom bindings: expect failure here.
 prop_chunkTail_is_prefix_gotcha :: TC -> Property 

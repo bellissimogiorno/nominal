@@ -44,12 +44,12 @@ module Language.Nominal.Nom
      -- * Creating a @'Nom'@
      , res, kres, resN, reRes 
      -- * Destroying a @'Nom'@
-     , unNom -- nomTo, genUnNom, genUnNom', 
+     , unNom, nomToIO
      -- * Creating fresh ids in a @'Nom'@
      , freshKAtom, freshAtom, freshKAtoms, freshAtoms, freshKName, freshName, freshKNames, freshNames -- , atFresh
      -- * 'KNom' and other functors
      -- $functor
-     , transposeNomF -- transposeTraversableNom  
+     , transposeNomF 
      -- * Tests
      -- $tests
      , module Language.Nominal.SMonad
@@ -93,7 +93,7 @@ This file deals with the first class above.  The second and third are in "Langua
 
 
 -- | Data in local @'KAtom' s@-binding context.
-newtype KNom s a = Nom { nomToIO :: IO (XRes s a) -- ^ Recover a name-generating IO action from a 'KNom' binding.  If you execute one of these using 'unsafePerformIO', you get the data in @a@ (the /body/ of the binding), with some actual freshly-generated atoms.  See also 'unNom'.
+newtype KNom s a = Nom { getNom :: IO (XRes s a) -- ^ Recover a name-generating IO action from a 'KNom' binding.  If you execute one of these using 'unsafePerformIO', you get the data in @a@ (the /body/ of the binding), with some actual freshly-generated atoms.  See also 'unNom'.
                        }
    deriving (Generic)
    deriving (Functor, Applicative, Monad) via ViaSMonad (KNom s) 
@@ -123,7 +123,7 @@ instance SMonad [KAtom s] (KNom s) where
     --
     -- /Note: This is our only use of 'unsafePerformIO'.  If a fresh ID got generated, then it came from here./
     exit :: KNom s a -> a
-    exit = exit . unsafePerformIO . nomToIO 
+    exit = exit . unsafePerformIO . getNom 
 
 -- | Data in a local atom-binding context at @'Tom'@s.
 type Nom = KNom Tom
@@ -181,6 +181,9 @@ resN = res . fmap nameAtom
 unNom :: KRestrict s a => KNom s a -> a
 unNom = exitWith restrict
 
+-- | Another way to safely exit 'KNom': convert it to an IO action (the IO may generate fresh names) 
+nomToIO :: KNom s a -> IO a
+nomToIO (Nom a') = exit <$> a' 
 
 
 -- * Creating fresh ids in a @'Nom'@
