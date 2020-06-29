@@ -16,6 +16,7 @@ synopsis:           Name-binding & alpha-equivalence
 extra-source-files:
       stack.yaml
     , src/Language/Nominal/Blurb.txt
+    , CHANGELOG.markdown
 
 
 custom-setup
