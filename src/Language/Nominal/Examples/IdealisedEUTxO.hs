@@ -390,7 +390,7 @@ singletonChunk :: Transaction r d v -> Maybe (Chunk r d v)
 singletonChunk tx = toMaybe (transactionValid tx) $ Chunk (return [tx])
 
 -- | Creates a valid @'Chunk'@ from a single @'Transaction'@.
--- If it fails (because the transaction is invalid), it raises and error.
+-- If it fails (because the transaction is invalid), it raises an error.
 unsafeSingletonChunk :: HasCallStack => Transaction r d v -> Chunk r d v
 unsafeSingletonChunk = fromMaybe err . singletonChunk
   where

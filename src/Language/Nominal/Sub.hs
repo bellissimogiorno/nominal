@@ -91,13 +91,6 @@ instance {-# INCOHERENT #-} (Typeable s, Swappable n, Swappable x, Swappable y, 
    conc y' x = y' @@! \n -> sub n x  
  
 
-{-- | Nameless form of substitution, where the name for which we substitute is packaged in a @'KAbs'@ abstraction. 
-subApp :: (Typeable s, Swappable n, Swappable x, Swappable y, KSub (KName s n) x y) => KAbs (KName s n) y -> x -> y
-subApp y' x = y' @@! \n -> sub n x -- flip sub x 
--- | Nameless form of substitution, where the name for which we substitute is packaged in a @'KAbs'@ abstraction ('flip'ped version). 
-appSub :: (Typeable s, Swappable n, Swappable x, Swappable y, KSub (KName s n) x y) => x -> KAbs (KName s n) y -> y
-appSub = flip subApp --}
-
 
 -- | sub on a nominal abstraction substitutes in the label, and substitutes capture-avoidingly in the body
 instance (Typeable s, Typeable u, KSub (KName s n) x t, KSub (KName s n) x y, Swappable t, Swappable y) => 

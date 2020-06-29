@@ -2,8 +2,8 @@ resolver: lts-15.8
 packages:
 - .
 extra-deps:
-- Unique-0.4.7.7@sha256:2269d3528271e25d34542e7c24a4e541e27ec33460e1ea00845da95b82eec6fa,2777
-- algebra-4.3.1@sha256:323cf20c508e0b71422b767ff3a89e4188f68aa59b2df9d0fe6e9f9bae7938fb,4129
-- extra-1.6.21
-- finite-typelits-0.1.4.2  # for Data.Finite in IdealisedEUTxOSpec
-- data-default-0.7.1.1     # for Data.Default
+ - Unique-0.4.7.7@sha256:2269d3528271e25d34542e7c24a4e541e27ec33460e1ea00845da95b82eec6fa,2777
+ - algebra-4.3.1@sha256:323cf20c508e0b71422b767ff3a89e4188f68aa59b2df9d0fe6e9f9bae7938fb,4129
+ - extra-1.6.21
+ - finite-typelits-0.1.4.2  # for Data.Finite in IdealisedEUTxOSpec
+ - data-default-0.7.1.1     # for Data.Default
