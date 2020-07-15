@@ -7,7 +7,7 @@ The interaction of name-binding and alpha-equivalence with data can be tricky.  
 * Inductively defining syntax and reductions of a syntax with binding, e.g. lambda-calculus or System F.
 * Graph-like structures, especially if they have danging pointers.
 
-This package implements a nominal datatypes package in Haskell, based on names and swappings.  With it, you can define data with name-binding and program on this data in a nice manner that closely mirrors informal practice.
+This package implements a nominal datatypes package in Haskell, based on names and swappings.  
 With it, you can define data with name-binding and program on this data in a manner closely mirroring informal practice.
 
 The package design is based on a well-studied mathematical reference model as described in [a new approach to abstract syntax with variable binding](https://link.springer.com/article/10.1007/s001650200016) ([author's pdfs](http://www.gabbay.org.uk/papers.html#newaas-jv)).
@@ -50,8 +50,8 @@ Clone this repo:
 
 5. Explore it in ghci:
 
-        $ stack ghci Language/Nominal/Examples/SystemF.hs
-        $ stack ghci Language/Nominal/Examples/IdealisedEUTxO.hs
+        $ stack ghci src/Language/Nominal/Examples/SystemF.hs
+        $ stack ghci src/Language/Nominal/Examples/IdealisedEUTxO.hs
 
 ### Using `Cabal`
 

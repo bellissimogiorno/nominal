@@ -92,7 +92,7 @@ Typeclasses of types with a structural notion of /the atoms in this object/.  In
 /Note:/ "having empty support" does /not/ mean "having no atoms".  It means "symmetric under swapping atoms", which is not at all the same idea. 
 * 'Language.Nominal.Name.Nameless': types like @Int@, @String@, and @()@ that are guaranteed atoms-free. 
 * 'Language.Nominal.Nom.KNom' and 'Language.Nominal.Nom.Nom': An atoms-binding monad.
-* 'Language.Nominal.Nom.Binder': A typeclass for functions acting on binding types.
+* 'Language.Nominal.Binder.Binder': A typeclass for functions acting on binding types.
 * 'Language.Nominal.Abs.KAbs' and 'Language.Nominal.Abs.Abs': A name-abstracting functor.
 * 'Language.Nominal.Name.KRestrict' and 'Language.Nominal.Name.Restrict': A typeclass of types with an inherent notion of atoms-binding.
 * 'Language.Nominal.Unify.KUnifyPerm' and 'Language.Nominal.Unify.UnifyPerm': Typeclasses of types with a notion of unification by injective partial functions on atoms.

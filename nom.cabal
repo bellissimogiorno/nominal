@@ -1,6 +1,6 @@
 cabal-version:      2.0
 name:               nom
-version:            0.1.0.1
+version:            0.1.0.2
 description:        Nominal-flavoured implementation of data in a context of local names, following the ideas in <https://link.springer.com/article/10.1007/s001650200016 a new approach to abstract syntax with variable binding> (see also <http://www.gabbay.org.uk/papers.html#newaas-jv author's pdfs>).
                     __The recommended landing page is "Language.Nominal", so please go there first.__ See also: a tutorial in "Language.Nominal.Examples.Tutorial"; a short development of untyped lambda-calculus in "Language.Nominal.Examples.UntypedLambda"; an example development of System F in "Language.Nominal.Examples.SystemF"; and an example development of an EUTxO-style blockchain in "Language.Nominal.Examples.IdealisedEUTxO".
 homepage:           https://github.com/bellissimogiorno/nominal#readme
