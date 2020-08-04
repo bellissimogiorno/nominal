@@ -47,7 +47,7 @@ infixl 9 :@
 data Exp = V Var              -- ^ Variable 
          | Exp :@ Exp         -- ^ Application 
          | Lam (KAbs Var Exp) -- ^ Lambda, using abstraction-type 
- deriving (Eq, Generic, Data, Swappable, Show)
+ deriving (Eq, Generic, Data, Swappable) -- , Show)
 
 -- | helper for building lambda-abstractions 
 lam :: Var -> Exp -> Exp 
@@ -77,14 +77,12 @@ instance KSub Var Exp Exp where
 
 -- | weak head normal form of a lambda-term.
 whnf :: Exp -> Exp 
-whnf (f :@ a) = case whnf f of
-  Lam b' -> whnf $ b' `conc` a  
-  f'     -> f' :@ a
-whnf e = e
+whnf (Lam b' :@ a) = whnf $ b' `conc` a  
+whnf             e = e
 
 -- | (\x x) y
 example1 :: Exp
-example1 = (\[x, y] -> lam x $ V x :@ V y) `genAppC` freshNames ["x", "y"] 
+example1 = (\[x, y] -> lam x (V x) :@ V y) `genAppC` freshNames ["x", "y"] 
 -- | y
 example1whnf :: Exp
 example1whnf = whnf example1
@@ -96,3 +94,8 @@ example2 = (\[x, y] -> lam x (V x :@ V y) :@ V x) `genAppC` freshNames ["x", "y"
 example2whnf :: Exp
 example2whnf = whnf example2
 
+instance Show Exp where
+   show     (V v) = show v 
+   show   (Lam e) = "(λ" ++ (show e) ++ ")"
+   show (e :@ e') = (show e) ++ " " ++ (show e')
+ 

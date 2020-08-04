@@ -144,22 +144,20 @@ instance KSub Var Exp Exp where
 -}
 
 -- | weak head normal form of a lambda-term.
-whnf :: Exp -> Exp
-whnf (f :@ a) = case whnf f of
-  Lam b' -> whnf $ b' `subApp` a
-  f'     -> f' :@ a
-whnf e = e
+whnf :: Exp -> Exp 
+whnf (Lam b' :@ a) = whnf $ b' `conc` a  
+whnf             e = e
 
 -- | (\x x) y
 example1 :: Exp
-example1 = (\[x, y] -> lam x $ V x :@ V y) `genAppC` freshNames ["x", "y"]
+example1 = (\[x, y] -> lam x (V x) :@ V y) `genAppC` freshNames ["x", "y"] 
 -- | y
 example1whnf :: Exp
 example1whnf = whnf example1
 
 -- | (\x xy) x
 example2 :: Exp
-example2 = (\[x, y] -> lam x (V x :@ V y) :@ V x) `genAppC` freshNames ["x", "y"]
+example2 = (\[x, y] -> lam x (V x :@ V y) :@ V x) `genAppC` freshNames ["x", "y"] 
 -- | xy
 example2whnf :: Exp
 example2whnf = whnf example2

@@ -46,7 +46,9 @@ module Language.Nominal.Nom
      -- * Destroying a @'Nom'@
      , unNom, nomToIO
      -- * Creating fresh ids in a @'Nom'@
-     , freshKAtom, freshAtom, freshKAtoms, freshAtoms, freshKName, freshName, freshKNames, freshNames -- , atFresh
+     , freshKAtom, freshAtom, freshKAtoms, freshAtoms 
+     , freshKName, freshName, freshKNames, freshNames 
+     , freshKNameIO, freshNameIO, freshKNamesIO, freshNamesIO 
      -- * 'KNom' and other functors
      -- $functor
      , transposeNomF 
@@ -189,7 +191,7 @@ nomToIO (Nom a') = exit <$> a'
 -- * Creating fresh ids in a @'Nom'@
 
 -- | Create a fresh atom-in-nominal-context
-freshKAtom :: Typeable s => KNom s (KAtom s)
+freshKAtom :: KNom s (KAtom s)
 freshKAtom = Nom $ do -- IO monad
    [a] <- freshKAtomsIO [()]
    return $ enter [a] a
@@ -199,7 +201,7 @@ freshAtom :: Nom Atom
 freshAtom = freshKAtom
 
 -- | Fresh @'Traversable' m@ of atoms (e.g. @m@ is list or stream)
-freshKAtoms :: (Traversable m, Typeable s) => m t -> KNom s (m (KAtom s))
+freshKAtoms :: Traversable m => m t -> KNom s (m (KAtom s))
 freshKAtoms = mapM (const freshKAtom)
 
 -- | Fresh @'Traversable' m@ of atoms (e.g. @m@ is list or stream).
@@ -207,12 +209,13 @@ freshKAtoms = mapM (const freshKAtom)
 freshAtoms :: Traversable m => m t -> Nom (m Atom)
 freshAtoms = freshKAtoms
 
+
 -- | Create a fresh name-in-a-nominal-context with label @t@
-freshKName :: Typeable s => t -> KNom s (KName s t)
+freshKName :: t -> KNom s (KName s t)
 freshKName t = freshKAtom <&> Name t
 
 -- | Create fresh names-in-a-nominal-context
-freshKNames :: (Traversable m, Typeable s) => m t -> KNom s (m (KName s t))
+freshKNames :: Traversable m => m t -> KNom s (m (KName s t))
 freshKNames = mapM freshKName
 
 -- | Canonical version of 'freshKName' for @'Tom'@ name.
@@ -222,6 +225,24 @@ freshName = freshKName
 -- | Canonical version of 'freshKNames' for @'Tom'@ names.
 freshNames :: Traversable m => m t -> Nom (m (Name t))
 freshNames = freshKNames
+
+
+-- | Create a fresh name-in-a-nominal-context with label @t@
+freshKNameIO :: t -> IO (KName s t)
+freshKNameIO = nomToIO . freshKName  
+
+-- | Create fresh names-in-a-nominal-context
+freshKNamesIO :: Traversable m => m t -> IO (m (KName s t))
+freshKNamesIO = nomToIO . freshKNames
+
+-- | Canonical version of 'freshKName' for @'Tom'@ name.
+freshNameIO :: t -> IO (Name t)
+freshNameIO = nomToIO . freshKName
+
+-- | Canonical version of 'freshKNames' for @'Tom'@ names.
+freshNamesIO :: Traversable m => m t -> IO (m (Name t))
+freshNamesIO = nomToIO . freshKNames
+
 
 {-- 
 -- | atFresh f returns the value of f at a fresh name with label @t@
@@ -239,11 +260,10 @@ There are three functions that will commute 'KNom' with some other 'f':
 * 'transposeMF'
 * 'transposeFM'
 
-Taken together, these functions are making a point that 'KNom' is compatible with your favourite container type.  Because 'KNom' can commuted, there is no need to wonder whether (for example) a graph-with-binding should be a graph with binding on the vertices, or on the edges, or on the graph overall, or any combination.  All of these are valid design decisions and one may be more /convenient/ than the other, but in the end we can isomorphically commute to a single top-level 'KNom' binding.
+Taken together, these functions are making a point that 'KNom' is compatible with your favourite container type.  Because 'KNom' commutes, there is no need to wonder whether (for example) a graph-with-binding should be a graph with binding on the vertices, or on the edges, or on the graph overall, or any combination.  All of these are valid design decisions and one may be more /convenient/ than the other, but we know we can isomorphically commute to a single top-level 'KNom' binding.
 
 In that sense, 'KNom' captures a general theory of binding.
-It is also a mathematical justification for why the 'Language.Nominal.Binder.Binder' typeclass turns out to be so useful.
-
+This also mathematically justifies why the 'Language.Nominal.Binder.Binder' typeclass is so useful.
 -}
 
 

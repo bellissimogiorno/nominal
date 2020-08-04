@@ -44,6 +44,7 @@ library
       Language.Nominal.Unique
       Language.Nominal.Equivar
       Language.Nominal.Examples.SystemF
+      Language.Nominal.Examples.Graph
       Language.Nominal.Examples.IdealisedEUTxO
       Language.Nominal.Examples.UntypedLambda
       Language.Nominal.Examples.Assembly1

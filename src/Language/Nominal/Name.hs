@@ -314,9 +314,9 @@ instance Swappable (Nameless a) where
 
 deriving via Nameless Bool instance Swappable Bool
 deriving via Nameless Int  instance Swappable Int
+deriving via Nameless Integer instance Swappable Integer
 deriving via Nameless ()   instance Swappable ()
 deriving via Nameless Char instance Swappable Char
-
 
 -- * Generics support for @'KSwappable'@
 

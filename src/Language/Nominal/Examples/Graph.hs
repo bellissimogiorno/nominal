@@ -7,8 +7,9 @@ Maintainer  : murdoch.gabbay@gmail.com
 Stability   : experimental
 Portability : POSIX
 
-This file is under development.
-
+A development file to build on <https://hackage.haskell.org/package/algebraic-graphs Andrey Mokhov's algebraic-graphs> library.
+__THIS FILE IS UNDER DEVELOPMENT__
+Connect should be implemented such that only /free/ vertices are connected; not bound ones.  Overlay should be capture-avoiding (which should be automatic). 
 -}
 
 {-# LANGUAGE InstanceSigs          
@@ -36,7 +37,8 @@ import Language.Nominal.Name
 import Language.Nominal.NameSet 
 import Language.Nominal.Nom
 
--- | Should parameterise over atom type (see 'KAtom').  For now, I use the default atom type 'Tom'.
+-- | A datatype of graphs with binding.  
+-- Perhaps should parameterise over atom type (see 'KAtom').  For now, I use the default atom type 'Tom'.
 data Graph a = Empty
              | Vertex a
              | Overlay (Graph a) (Graph a)

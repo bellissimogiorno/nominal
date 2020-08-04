@@ -156,7 +156,8 @@ type Restrict = KRestrict Tom
 
 -- | Form of restriction that takes names instead of atoms.  Just discards name labels and calls @'restrict'@.
 restrictN :: KRestrict s a => [KName s t] -> a -> a
-restrictN l = restrict (nameAtom <$> l)
+restrictN = restrict . (fmap nameAtom) 
+-- restrictN l = restrict (nameAtom <$> l)
 
 
 -- | Restriction is trivial on elements of nameless types 
